@@ -6,7 +6,7 @@ RUN useradd -u $UID --create-home hex
 
 RUN apt-get update && apt-get install
 RUN apt-get install -y python3 python3-pip
-RUN apt-get install default-jre
+RUN apt-get install -y default-jre
 
 # install requirements
 RUN python3 -m pip install pip --upgrade
