@@ -1,3 +1,5 @@
+import random
+
 from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
@@ -80,9 +82,15 @@ class MCTSNode:
         """
         moves_taken = []
         valid_moves = get_valid_moves(self.state)
+        if self.state.has_ended(get_opponent_colour(current_colour)):
+            # If the current state is a winning state
+            # Return the winner
+            winner = self.state.get_winner()
+            self.state._winner = None
+            return winner
         while True:
             # Faster to remove the move from the list than to generate a new list every move
-            move = valid_moves[np.random.randint(0, len(valid_moves))]
+            move = random.choice(valid_moves)
             valid_moves.remove(move)
             moves_taken.append(move)
 
@@ -155,7 +163,7 @@ class MCTSAgent(AgentBase):
         root.generate_all_children_nodes(self.colour)
 
         # Should use some time limit here based on how much time we have left
-        for _ in range(len(root.children) * 5):
+        for _ in range(10000):
             # Use the tree policy to select the best node
             # Uses UCT to select the best node
             child_to_expand = root.best_child(c=1.41)

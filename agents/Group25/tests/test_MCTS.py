@@ -138,3 +138,12 @@ class TestMCTSAgent:
         move = agent.make_move(turn=3, board=state, opp_move=None)
         possible_moves = get_valid_moves(state)
         assert (move.x, move.y) in possible_moves
+
+    def test_make_move_one_away(self, one_away_board):
+        """
+        Test the make_move method when the agent is one move away from winning
+        """
+        agent = MCTSAgent(Colour.BLUE)
+        move = agent.make_move(turn=4, board=one_away_board, opp_move=None)
+        assert move.x == 6
+        assert move.y == 9
