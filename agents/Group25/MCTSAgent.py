@@ -78,7 +78,6 @@ class MCTSNode:
         Arguments:
             current_colour: Colour of the current player
         """
-        # Deep copy is necessary here
         moves_taken = []
         valid_moves = get_valid_moves(self.state)
         while True:
