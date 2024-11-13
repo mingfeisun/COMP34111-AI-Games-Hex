@@ -1,5 +1,7 @@
 from src.Colour import Colour
 from src.Tile import Tile
+from rich.console import Console
+from rich.text import Text
 
 
 class Board:
@@ -130,6 +132,32 @@ class Board:
             output += "\n"
 
         return output
+
+    def print_with_colour(self):
+        """
+        Print the board with colours using rich to colour the characters
+        """
+        console = Console()
+        output = ""
+        leading_spaces = ""
+        for line in self._tiles:
+            text_line = Text(leading_spaces)  # Start with leading spaces
+            leading_spaces += " "
+
+            for tile in line:
+                char = Colour.get_char(tile.colour)
+                if char == 'R':
+                    text_line.append(char + " ", style="bold red")
+                elif char == 'B':
+                    text_line.append(char + " ", style="bold blue")
+                else:
+                    text_line.append(char + " ", style="bold white")
+
+            output += text_line.plain + "\n"  # Append line to output
+            console.print(text_line)  # Print the line with colors
+
+        return output
+
 
     def get_winner(self) -> Colour:
         return self._winner

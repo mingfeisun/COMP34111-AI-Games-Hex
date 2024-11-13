@@ -123,7 +123,8 @@ class Game:
             currentPlayer: Player = self.players[self.current_player]
             playerAgent = currentPlayer.agent
             logger.info(f"Turn {self.turn}: player {currentPlayer.name}")
-            logger.info(f"Starting Board:\n{str(self.board)}")
+            # logger.info(f"Starting Board:\n{str(self.board)}")
+            self.board.print_with_colour()
             currentPlayer.turn += 1
 
             boardCopy = copy.deepcopy(self.board)
@@ -159,7 +160,7 @@ class Game:
             if self.board.has_ended(self.current_player):
                 break
 
-            logger.info(f"Turn Ending Board:\n{str(self.board)}")
+            #logger.info(f"Turn Ending Board:\n{str(self.board)}")
 
             self.current_player = Colour.opposite(self.current_player)
         return self._end_game(endState)
@@ -198,7 +199,8 @@ class Game:
         total_time = time() - self._start_time
 
         logger.info("Game over")
-        logger.info(f"Final Board:\n{str(self.board)}")
+        # logger.info(f"Final Board:\n{str(self.board)}")
+        self.board.print_with_colour()
         logger.info(f"Total time: {Game.ns_to_s(total_time)}s")
         winner = None
 
