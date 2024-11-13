@@ -12,9 +12,10 @@ class GameTree:
     q: int # the sum of all payoffs received
     n: int # the number of visits
 
-    def __init__(self, board: Board, board_size: int):
+    def __init__(self, board: Board, board_size: int, parent: GameTree = None):
         self._board = board
         self._board_size = board_size
+        self._parent = parent
         self._children = []
         self._q = 0
         self._n = 0
@@ -35,7 +36,7 @@ class GameTree:
         return None
     
     def add_child(self, board: Board):
-        child = GameTree(board)
+        child = GameTree(board, self._board_size, self)
         self._children.append(child)
     
     def get_children(self) -> list[GameTree]:

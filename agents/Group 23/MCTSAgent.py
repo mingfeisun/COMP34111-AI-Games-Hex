@@ -98,10 +98,27 @@ class MCTSAgent(AgentBase):
         return selected_child
 
     def _simulate(self, board: Board):
-        pass
+        while True:
+            node = self._game_tree.get_node(board)
+            if board.has_ended():
+                winner = board.get_winner()
+                if winner == self.colour:
+                    node.v += 1
+                else:
+                    node.v -= 1
+            move = self._default_policy(board)
+            board.make_move(move, self.colour)
+            self._backup(board)
 
     def _backup(self, board: Board):
-        pass
+        node = self._game_tree.get_node(board)
+        if node is None:
+            raise ValueError("Node not found in game tree")
+        if node.parent is None:
+            return
+        
+        node.parent.q += node.q
+        node.parent.n += 1
     
     def _default_policy(self, board: Board) -> Move:
         """
