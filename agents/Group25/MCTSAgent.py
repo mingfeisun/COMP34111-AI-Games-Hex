@@ -1,20 +1,9 @@
-import math
-
 from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
 from src.AgentBase import AgentBase
-import random
-import time
-import numpy as np
-from collections import defaultdict
 import copy
-
-def has_game_ended(state: Board) -> bool:
-    """
-    Check if the game has ended
-    """
-    return copy.deepcopy(state).has_ended(Colour.RED) or copy.deepcopy(state).has_ended(Colour.BLUE)
+import numpy as np
 
 def get_valid_moves(state: Board) -> list[tuple]:
     """
@@ -26,6 +15,8 @@ def get_opponent_colour(colour: Colour) -> Colour:
     """
     Get the opponent colour
     """
+    if (colour != Colour.RED) and (colour != Colour.BLUE):
+        raise ValueError("Invalid colour")
     return Colour.RED if colour == Colour.BLUE else Colour.BLUE
 
 class MCTSNode:
@@ -35,62 +26,96 @@ class MCTSNode:
     def __init__(self, state: Board, parent=None, move=None):
         """
         Initialize the node
+        Arguments:
+            state: State of the board in this node
+            parent: Parent node
+            move: The move that was made to reach this node
         """
         self.state: Board = state
         self.parent: MCTSNode = parent
         self.children: list[MCTSNode] = []
-        self.move: tuple = move
         self.visits: int = 0
-        self.value: int = 0
+        self.payoff_sum: int = 0
+        # Use tuples for the move to avoid overhead of using Move objects
+        # In the form (x, y)
+        self.move: tuple = move
         self.valid_moves: list[tuple] = get_valid_moves(state)
-        self.unexplored_moves: list[tuple] = self.valid_moves
 
-    def is_fully_expanded(self) -> bool:
+    def generate_all_children_nodes(self, player_colour: Colour):
         """
-        Check if the node is fully expanded
-        That is there are no more unexplored moves
-
-        Returns true if all possible moves have been expanded
+        Generate all children nodes
+        Input:
+            player_colour: Colour of the player
         """
-        return len(self.unexplored_moves) == 0
+        # Create all children nodes with the same state as the parent
+        self.children = [
+            MCTSNode(
+                state=copy.deepcopy(self.state),  # Deepcopy here is unavoidable
+                parent=self,
+                move=move,
+            ) for move in self.valid_moves
+        ]
 
-    def expand(self):
+        # Apply the move to each of the children nodes
+        for child, move in zip(self.children, self.valid_moves):
+            child.state.tiles[move[0]][move[1]].colour = player_colour
+
+    def backpropagate(self, result: int):
         """
-        Expand the node by adding the children nodes
+        Update the nodes in the tree with the result of the simulation
+        Arguments:
+            result: 1 if the player won, -1 if the opponent won
         """
-        if not self.unexplored_moves:
-            return None
-        move = self.unexplored_moves[np.random.randint(len(self.unexplored_moves))]
-        new_state = copy.deepcopy(self.state)
-        new_state.set_tile_colour(move[0], move[1], Colour.RED if len(self.children) % 2 == 0 else Colour.BLUE)
+        node = self
+        while node is not None:
+            node.visits += 1
+            node.payoff_sum += result
+            node = node.parent
 
-        child_node = MCTSNode(state=new_state, parent=self, move=move)
-        self.children.append(child_node)
-        self.unexplored_moves.remove(move)
+    def simulate_from_node(self, current_colour: Colour):
+        """Simulate the game until the end with random moves
 
-        return child_node
+        Arguments:
+            current_colour: Colour of the current player
+        """
+        # Deep copy is necessary here
+        current_state = copy.deepcopy(self.state)
+        valid_moves = get_valid_moves(current_state)
+        while True:
+            # Faster to remove the move from the list than to generate a new list every move
+            move = valid_moves[np.random.randint(0, len(valid_moves))]
+            valid_moves.remove(move)
 
+            # Do the move
+            current_state.tiles[move[0]][move[1]].colour = current_colour
+
+            # Check if the game has ended
+            if current_state.has_ended(current_colour):
+                return current_state.get_winner()
+
+            # Switch the player for the next move
+            current_colour = get_opponent_colour(current_colour)
 
     def best_child(self, c: float):
         """
         Select the best child node based on UCT
-
-        Formula:
-            w_i / n_i + c * sqrt(t) / n_i
-            w_i: number of wins for the node
-            n_i: number of simulations for the node
-            c: exploration parameter
-            t: total number of simulations
+        Arguments:
+            c: Exploration parameter
         """
-        values = np.array([child.value for child in self.children])
+        values = np.array([child.payoff_sum for child in self.children])
         visits = np.array([child.visits for child in self.children])
 
-        exploitation = np.where(visits > 0, values / visits, 0)
-        total_visits_log = np.log(self.visits)
-        exploration = np.where(visits > 0, c * np.sqrt(total_visits_log / visits), float('inf'))
-        ucb1_values = exploitation + c * exploration
-        best_index = np.argmax(ucb1_values)
-        return self.children[best_index]
+        # If there are unexplored nodes we will always choose one of them so don't bother with UCT
+        unexplored = np.where(visits == 0)[0]
+        if unexplored.size > 0:
+            best_index = unexplored[np.random.randint(0, unexplored.size)]
+            return self.children[best_index]
+
+        # Calculate the UCT value for each child and select the best one
+        exploitation = values / visits
+        exploration = c * np.sqrt(np.log(self.visits) / visits)
+        ucb1_values = exploitation + exploration
+        return self.children[np.argmax(ucb1_values)]
 
 
 class MCTSAgent(AgentBase):
@@ -107,66 +132,32 @@ class MCTSAgent(AgentBase):
             (i, j) for i in range(self._board_size) for j in range(self._board_size)
         ]
 
-    def select(self, node: MCTSNode):
-        """
-        Select the best child node based on UCT
-        """
-        while not node.is_fully_expanded():
-            node = node.best_child(c=1.41)
-        return node
-
-
-    def simulate(self, node: MCTSNode):
-        """
-        Simulate the game until the end with random moves
-        """
-        current_state = copy.deepcopy(node.state)
-        while not has_game_ended(current_state):
-            move = random.choice(self._choices)
-            current_state.tiles[move[0]][move[1]].colour = self.colour
-            if has_game_ended(copy.deepcopy(current_state)):
-                break
-            move = random.choice(self._choices)
-            current_state.tiles[move[0]][move[1]].colour = get_opponent_colour(self.colour)
-            if has_game_ended(copy.deepcopy(current_state)):
-                break
-        copy1 = copy.deepcopy(current_state)
-        copy2 = copy.deepcopy(current_state)
-        if copy1.has_ended(self.colour):
-            return copy1.get_winner()
-        elif copy2.has_ended(get_opponent_colour(self.colour)):
-            return copy2.get_winner()
-
-    def backpropagate(self, node: MCTSNode, result: int):
-        """
-        Update the nodes in the tree with the result of the simulation
-        """
-        while node is not None:
-            node.visits += 1
-            node.value += result
-            node = node.parent
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """
         Make move based on MCTS
+        Arguments:
+            turn: Current turn number
+            board: Current state of the board
+            opp_move: Move made by the opponent
         """
-        if turn == 2:
-            # This is the first move of the game
-            # Can swap if we want
-            if bool(random.getrandbits(1)):
-                return Move(-1, -1)
-        # Return the best move by MCTS
-        root_node = MCTSNode(board)
-        while not root_node.is_fully_expanded():
-            root_node.expand()
+        # At the moment 50/50 chance of swapping if it is the second turn
+        # TODO: Implement a better way to decide if we should swap
+        if turn == 2 and np.random.randint(0, 2) == 0:
+            return Move(-1, -1)
 
-        for i in range(10):
-            node = self.select(root_node)
-            if not node.is_fully_expanded():
-                node.expand()
-            result = self.simulate(node)
-            self.backpropagate(node, 1 if result == self.colour else -1)
-        move_tuple = root_node.best_child(1.42).move
-        return Move(move_tuple[0], move_tuple[1])
+        root = MCTSNode(state=board)
+        root.generate_all_children_nodes(self.colour)
 
+        # Should use some time limit here based on how much time we have left
+        for _ in range(len(root.children) * 5):
+            # Use the tree policy to select the best node
+            # Uses UCT to select the best node
+            child_to_expand = root.best_child(c=1.41)
+            # Simulate the game until the end
+            result_colour = child_to_expand.simulate_from_node(get_opponent_colour(self.colour))
+            # Backpropagate the result
+            child_to_expand.backpropagate(1 if result_colour == self.colour else -1)
 
+        best_child = root.best_child(c=0)
+        return Move(best_child.move[0], best_child.move[1])
