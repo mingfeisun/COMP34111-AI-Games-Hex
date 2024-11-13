@@ -163,7 +163,7 @@ class MCTSAgent(AgentBase):
         root.generate_all_children_nodes(self.colour)
 
         # Should use some time limit here based on how much time we have left
-        for _ in range(10000):
+        for _ in range(1000):
             # Use the tree policy to select the best node
             # Uses UCT to select the best node
             child_to_expand = root.best_child(c=1.41)
