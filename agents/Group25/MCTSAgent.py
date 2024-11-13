@@ -79,19 +79,25 @@ class MCTSNode:
             current_colour: Colour of the current player
         """
         # Deep copy is necessary here
-        current_state = copy.deepcopy(self.state)
-        valid_moves = get_valid_moves(current_state)
+        moves_taken = []
+        valid_moves = get_valid_moves(self.state)
         while True:
             # Faster to remove the move from the list than to generate a new list every move
             move = valid_moves[np.random.randint(0, len(valid_moves))]
             valid_moves.remove(move)
+            moves_taken.append(move)
 
             # Do the move
-            current_state.tiles[move[0]][move[1]].colour = current_colour
+            self.state.tiles[move[0]][move[1]].colour = current_colour
 
             # Check if the game has ended
-            if current_state.has_ended(current_colour):
-                return current_state.get_winner()
+            if self.state.has_ended(current_colour):
+                # Hacky way to reset the board state
+                winner = self.state.get_winner()
+                self.state._winner = None  # Reset the winner technically _winner is private but python allows us to get around this
+                for move in moves_taken:
+                    self.state.tiles[move[0]][move[1]].colour = None
+                return winner
 
             # Switch the player for the next move
             current_colour = get_opponent_colour(current_colour)
