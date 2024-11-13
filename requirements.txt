@@ -1,0 +1,13 @@
+# For the actual game
+numpy
+pandas
+scikit-learn==1.5.2
+tensorflow==2.16.1
+keras==3.6.0
+torch==2.4.1
+
+# For testing
+pytest==8.3.3
+
+# For profiling
+snakeviz==2.2.2

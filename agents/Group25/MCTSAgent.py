@@ -141,9 +141,9 @@ class MCTSAgent(AgentBase):
             board: Current state of the board
             opp_move: Move made by the opponent
         """
-        # At the moment 50/50 chance of swapping if it is the second turn
+        # At the moment always switch on the second turn
         # TODO: Implement a better way to decide if we should swap
-        if turn == 2 and np.random.randint(0, 2) == 0:
+        if turn == 2:
             return Move(-1, -1)
 
         root = MCTSNode(state=board)

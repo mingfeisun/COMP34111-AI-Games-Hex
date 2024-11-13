@@ -199,7 +199,8 @@ class Game:
         total_time = time() - self._start_time
 
         logger.info("Game over")
-        logger.info(f"Final Board:\n{str(self.board)}")
+        # logger.info(f"Final Board:\n{str(self.board)}")
+        self.board.print_with_colour()
         logger.info(f"Total time: {Game.ns_to_s(total_time)}s")
         winner = None
 
