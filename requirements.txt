@@ -8,6 +8,7 @@ torch==2.4.1
 
 # For testing
 pytest==8.3.3
+pytest_timeout==2.3.1
 
 # For profiling
 snakeviz==2.2.2
