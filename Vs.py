@@ -60,6 +60,7 @@ if __name__ == "__main__":
     def run_game(game):
         result = game.run()
         print("Game finished")
+        print(f"Win method: {result['win_method']}")
         return result["winner"]
 
     games = [Game(
