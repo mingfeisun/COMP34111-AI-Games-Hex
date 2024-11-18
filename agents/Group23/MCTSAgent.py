@@ -13,19 +13,27 @@ from src.Colour import Colour
 from src.Move import Move
 
 class GameTree:
-    def __init__(self, board: Board, colour: Colour, move: Move = None):
+    def __init__(self, board: Board, colour: Colour, move: Move = None, parent = None):
         self.board = board
         self.colour = colour
         self.children = []
         self.move = move # represents the move that led to this state
+        self.parent = parent
 
         self.num_visits = 0
         self.value = 0
 
     def add_move(self, move):
         new_colour = Colour.opposite(self.colour)
-        new_state = GameTree(self.board.move(move), new_colour, move)
-        self.children.append(new_state, new_colour)
+
+        new_board = Board(self.board.size)
+        for i in range(self.board.size):
+            for j in range(self.board.size):
+                new_board.set_tile_colour(i, j, self.board.tiles[i][j].colour)
+        new_board.set_tile_colour(move.x, move.y, self.colour)
+
+        new_state = GameTree(new_board, new_colour, move)
+        self.children.append(new_state)
         return new_state
 
     def get_node(self, board):
@@ -65,7 +73,9 @@ class MCTSAgent(AgentBase):
         return child_value / child_visits + C * (2 * math.ln(parent_visits) / child_visits) ** 0.5
 
     def select_child_node(self, current: GameTree) -> GameTree:
-        if current.board.has_ended():
+        if current.board.has_ended(Colour.RED):
+            return current
+        if current.board.has_ended(Colour.BLUE):
             return current
         if len(current.children) == 0:
             return current
@@ -78,22 +88,20 @@ class MCTSAgent(AgentBase):
         return self.select_child_node(best_child)
 
     def rollout(self, current: GameTree):
-        node = current.copy()
         choices = [
             (i, j) for i in range(self._board_size) for j in range(self._board_size)
-            if node.board.tiles[i][j].colour is None
+            if current.board.tiles[i][j].colour is None
         ]
-        while not node.board.has_ended():
+        while not current.board.has_ended(Colour.RED) and not current.board.has_ended(Colour.BLUE):
             x, y = choice(self._choices)
-            node  = node.add_move(Move(x, y))
-            choices.remove((x, y))
-        return node.board.winner == self.colour
+            current  = current.add_move(Move(x, y))
+        if current.board.get_winner() == self.colour:
+            return 1
+        return 0
     
     def expand(self, current: GameTree):
         for i, j in self._choices:
-            new_board = current.board.move(Move(i, j))
-            new_current = GameTree(new_board, Colour.opposite(current.colour))
-            current.children.append(new_current)
+            current.add_move(Move(i, j))
         return current
     
     def backpropagate(self, current: GameTree, value: int):
@@ -118,8 +126,11 @@ class MCTSAgent(AgentBase):
                 value = self.rollout(current)
             else:
                 current = self.expand(current)
-                current = current.children[0]
-                value = self.rollout(current)
+                if len(current.children) == 0:
+                    value = self.rollout(current)
+                else:
+                    current = current.children[0]
+                    value = self.rollout(current)
             
             self.backpropagate(current, value)
     

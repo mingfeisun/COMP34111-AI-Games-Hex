@@ -23,3 +23,9 @@ class GameTree:
             if child.board == board:
                 return child
         return None
+    
+    def copy(self) -> GameTree:
+        new_board = self.board.copy()
+        new_tree = GameTree(new_board, self.colour, self.move)
+        new_tree.children = [child.copy() for child in self.children]
+        return new_tree
