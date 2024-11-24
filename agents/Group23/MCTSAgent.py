@@ -1,171 +1,139 @@
-from random import choice
+import random
 import math
+import time
+from copy import deepcopy
 
 from src.AgentBase import AgentBase
+from src.Move import Move
 from src.Board import Board
 from src.Colour import Colour
-from src.Move import Move
 
-C = 2
+class TreeNode:
+    """Represents a node in the MCTS tree."""
 
-from src.Board import Board
-from src.Colour import Colour
-from src.Move import Move
+    def __init__(self, move=None, parent=None):
+        self.move = move  # The move that led to this node
+        self.parent = parent  # Parent node
+        self.children = []  # List of child nodes
+        self.visits = 0  # Number of times this node has been visited
+        self.wins = 0  # Number of wins from this node
 
-class GameTree:
-    def __init__(self, board: Board, colour: Colour, move: Move = None, parent = None):
-        self.board = board
-        self.colour = colour
-        self.children = []
-        self.move = move # represents the move that led to this state
-        self.parent = parent
+    def is_fully_expanded(self, legal_moves):
+        """Checks if all possible moves have been expanded."""
+        return len(self.children) == len(legal_moves)
 
-        self.num_visits = 0
-        self.value = 0
+    def best_child(self, exploration_param=math.sqrt(2)):
+        """Selects the best child using UCT."""
+        return max(
+            self.children,
+            key=lambda child: (child.wins / child.visits) + exploration_param * math.sqrt(math.log(self.visits) / child.visits)
+        )
 
-    def add_move(self, move):
-        new_colour = Colour.opposite(self.colour)
+    def add_child(self, move):
+        """Adds a child node for a move."""
+        child_node = TreeNode(move, parent=self)
+        self.children.append(child_node)
+        return child_node
+    
+######################################################################################
 
-        new_board = Board(self.board.size)
-        for i in range(self.board.size):
-            for j in range(self.board.size):
-                new_board.set_tile_colour(i, j, self.board.tiles[i][j].colour)
-        new_board.set_tile_colour(move.x, move.y, self.colour)
+class MCTS:
+    """Implements the Monte Carlo Tree Search algorithm."""
 
-        new_state = GameTree(new_board, new_colour, move)
-        self.children.append(new_state)
-        return new_state
+    def __init__(self, board: Board, colour: Colour, turn_length_s: int = 5):
+        self.board = board  # The game board
+        self.colour = colour  # Agent's colour
+        self.turn_length = turn_length_s  # Length of a MCTS search in seconds
 
-    def get_node(self, board):
-        for child in self.children:
-            if child.board == board:
-                return child
-        return None
+    def run(self, root: TreeNode):
+        """Performs MCTS simulations from the root node."""
+        start_time = time.time()
+        while time.time() - start_time < self.turn_length:
+            node = self._select(root)
+            result = self._simulate(node)
+            self._backpropagate(node, result)
+
+        # Choose the most visited child as the best move
+        return max(root.children, key=lambda child: child.visits).move
+
+    def _select(self, node: TreeNode):
+        """Selects a node to expand using the UCT formula."""
+        legal_moves = self._get_legal_moves(self.board)
+        while node.is_fully_expanded(legal_moves):
+            node = node.best_child()
+        return self._expand(node)
+
+    def _expand(self, node: TreeNode):
+        """Expands the node by adding a new child."""
+        legal_moves = self._get_legal_moves(self.board)
+        unvisited_moves = [move for move in legal_moves if move not in [child.move for child in node.children]]
+
+        if unvisited_moves:
+            new_move = random.choice(unvisited_moves)
+            return node.add_child(new_move)
+
+        return node
+
+    def _simulate(self, node: TreeNode):
+        """Simulates a random game from the current node and returns the result."""
+        simulation_board = deepcopy(self.board)  # Create a copy of the board
+        x, y = node.move.x, node.move.y
+        simulation_board.set_tile_colour(x, y, self.colour)  # Play the move
+
+        # Play randomly until the game ends
+        current_colour = self.colour.opposite()
+        while (not simulation_board.has_ended(colour=current_colour) and
+               not simulation_board.has_ended(colour=current_colour.opposite())):
+            legal_moves = self._get_legal_moves(simulation_board)
+            move = random.choice(legal_moves)
+
+            x, y = move.x, move.y
+            simulation_board.set_tile_colour(x, y, current_colour)
+            current_colour = current_colour.opposite()
+
+        return 1 if simulation_board.get_winner() == self.colour else 0
+
+    def _backpropagate(self, node: TreeNode, result: int):
+        """Backpropagates the simulation result through the tree."""
+        while node is not None:
+            node.visits += 1
+            node.wins += result
+            node = node.parent
+            result = 1 - result  # Invert the result for the opponent's perspective
+
+    def _get_legal_moves(self, board: Board) -> list[Move]:
+        available_tiles = []
+        for row in board.tiles:
+            for tile in row:
+                if tile.colour != Colour.RED and tile.colour != Colour.BLUE:
+                    available_tiles.append(tile)
+        
+        if len(available_tiles) == 0:
+            raise ValueError("No legal moves available")
+        
+        return [Move(tile.x, tile.y) for tile in available_tiles]
+
+
+
+######################################################################################
 
 class MCTSAgent(AgentBase):
-    """This class describes the default Hex agent. It will randomly send a
-    valid move at each turn, and it will choose to swap with a 50% chance.
+    """An agent that uses MCTS for Hex."""
 
-    The class inherits from AgentBase, which is an abstract class.
-    The AgentBase contains the colour property which you can use to get the agent's colour.
-    You must implement the make_move method to make the agent functional.
-    You CANNOT modify the AgentBase class, otherwise your agent might not function.
-    """
-
-    _choices: list[Move]
-    _board_size: int = 11
-    _first_move: bool = True
-
-    def __init__(self, colour: Colour):
+    def __init__(self, colour: Colour, turn_length_s: int = 5):
         super().__init__(colour)
-        self._choices = [
-            (i, j) for i in range(self._board_size) for j in range(self._board_size)
-        ]
-    
-    def uct(self, node: GameTree) -> float:
-        parent_visits = node.parent.num_visits
-        child_visits = node.num_visits
+        self.turn_length = turn_length_s # max length of a turn in seconds
 
-        if child_visits == 0:
-            return math.inf
-
-        child_value = node.value
-        return child_value / child_visits + C * (2 * math.ln(parent_visits) / child_visits) ** 0.5
-
-    def select_child_node(self, current: GameTree) -> GameTree:
-        if current.board.has_ended(Colour.RED):
-            return current
-        if current.board.has_ended(Colour.BLUE):
-            return current
-        if len(current.children) == 0:
-            return current
-
-        best_child = current.children[0]
-        for child in current.children[1:]:
-            if self.uct(child) > self.uct(best_child):
-                best_child = child
-
-        return self.select_child_node(best_child)
-
-    def rollout(self, current: GameTree):
-        choices = [
-            (i, j) for i in range(self._board_size) for j in range(self._board_size)
-            if current.board.tiles[i][j].colour is None
-        ]
-        while not current.board.has_ended(Colour.RED) and not current.board.has_ended(Colour.BLUE):
-            x, y = choice(self._choices)
-            current  = current.add_move(Move(x, y))
-        if current.board.get_winner() == self.colour:
-            return 1
-        return 0
-    
-    def expand(self, current: GameTree):
-        for i, j in self._choices:
-            current.add_move(Move(i, j))
-        return current
-    
-    def backpropagate(self, current: GameTree, value: int):
-        current.num_visits += 1
-        current.value += value
-        if current.parent is not None:
-            self.backpropagate(current.parent, value)
-
-    def mcts(self, current: GameTree):
-        for _ in range(100): # TODO: Change this to execute while time permits
-            # update available choices
-            self._choices = [
-                (i, j) for i in range(self._board_size) for j in range(self._board_size)
-                if current.board.tiles[i][j].colour is None
-            ]
-
-            # selection
-            current = self.select_child_node(current)
-
-            # expansion and rollout
-            if current.num_visits == 0:
-                value = self.rollout(current)
-            else:
-                current = self.expand(current)
-                if len(current.children) == 0:
-                    value = self.rollout(current)
-                else:
-                    current = current.children[0]
-                    value = self.rollout(current)
-            
-            self.backpropagate(current, value)
-    
-    def get_best_move(self, current: GameTree) -> Move:
-        best_child = current.children[0]
-        for child in current.children[1:]:
-            avg_value = child.value / child.num_visits
-            if avg_value > (best_child.value / best_child.num_visits):
-                best_child = child
-        return best_child.move
-    
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
-        """The game engine will call this method to request a move from the agent.
-        If the agent is to make the first move, opp_move will be None.
-        If the opponent has made a move, opp_move will contain the opponent's move.
-        If the opponent has made a swap move, opp_move will contain a Move object with x=-1 and y=-1,
-        the game engine will also change your colour to the opponent colour.
+        """Selects a move using MCTS."""
+        if opp_move is not None:
+            x, y = opp_move.x, opp_move.y
+            board.set_tile_colour(x, y, self.colour.opposite())
 
-        Args:
-            turn (int): The current turn
-            board (Board): The current board state
-            opp_move (Move | None): The opponent's last move
+        root = TreeNode()
+        mcts = MCTS(board, self.colour, turn_length_s=self.turn_length)
+        best_move = mcts.run(root)
 
-        Returns:
-            Move: The agent's move
-        """
-
-        # initialise the game tree with appropriate colours
-        if turn == 1:
-            self._game_tree = GameTree(board, self.colour)
-        elif turn == 2:
-            self._game_tree = GameTree(board, Colour.opposite(self.colour))
-            self._game_tree.add_move(opp_move)
-        
-        self.mcts(self._game_tree)
-
-        # return the best move
-        self.get_best_move(self._game_tree)
+        x, y = best_move.x, best_move.y
+        board.set_tile_colour(x, y, self.colour)
+        return best_move
