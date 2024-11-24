@@ -85,7 +85,8 @@ class MCTS:
         while (not simulation_board.has_ended(colour=current_colour) and
                not simulation_board.has_ended(colour=current_colour.opposite())):
             legal_moves = self._get_legal_moves(simulation_board)
-            move = random.choice(legal_moves)
+
+            move = self._default_policy(simulation_board, current_colour, legal_moves)
 
             x, y = move.x, move.y
             simulation_board.set_tile_colour(x, y, current_colour)
@@ -113,6 +114,12 @@ class MCTS:
         
         return [Move(tile.x, tile.y) for tile in available_tiles]
 
+    def _default_policy(self, board: Board, colour: Colour, legal_moves: list[Move]) -> Move:
+        """Implements a default policy to select a simulation move."""
+
+
+        return random.choice(legal_moves)
+
 
 
 ######################################################################################
@@ -123,17 +130,37 @@ class MCTSAgent(AgentBase):
     def __init__(self, colour: Colour, turn_length_s: int = 5):
         super().__init__(colour)
         self.turn_length = turn_length_s # max length of a turn in seconds
+        self.tree = None
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """Selects a move using MCTS."""
+        if self.tree is None:
+            self.tree = TreeNode()
+
         if opp_move is not None:
+            # update game tree
+            self.tree = self.update_tree(self.tree, opp_move)
+
             x, y = opp_move.x, opp_move.y
             board.set_tile_colour(x, y, self.colour.opposite())
 
-        root = TreeNode()
         mcts = MCTS(board, self.colour, turn_length_s=self.turn_length)
-        best_move = mcts.run(root)
+        best_move = mcts.run(self.tree)
 
         x, y = best_move.x, best_move.y
         board.set_tile_colour(x, y, self.colour)
+
+        # update game tree
+        self.tree = self.update_tree(self.tree, best_move)
+
         return best_move
+    
+    def update_tree(self, tree: TreeNode, move: Move):
+        """Updates the tree with the opponent's move."""
+        for child in tree.children:
+            if child.move == move:
+                return child
+        
+        # If the move is not in the tree, create a new node
+        return TreeNode(parent=tree, move=move)
+
