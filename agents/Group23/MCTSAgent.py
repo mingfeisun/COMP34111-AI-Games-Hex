@@ -3,11 +3,39 @@ import math
 import time
 from copy import deepcopy
 import logging
+import itertools
 
 from src.AgentBase import AgentBase
 from src.Move import Move
 from src.Board import Board
 from src.Colour import Colour
+from src.Tile import Tile
+
+class Utilities:
+    RELATIVE_NEIGHBOURS = [
+        (-1, -1), (-1, 0), # row above
+        (0, -1), (0, 1), # same row
+        (1, 0), (1, 1) # row below
+    ]
+
+    def get_neighbours(board: Board, x, y) -> list[Tile]:
+        """Returns a list of all neighbouring tiles."""
+        neighbours = []
+        for offset in Utilities.RELATIVE_NEIGHBOURS:
+            x_offset, y_offset = offset
+            x_n, y_n = x + x_offset, y + y_offset
+
+            if Utilities.is_within_bounds(board, x_n, y_n):
+                neighbours.append(board.tiles[x_n][y_n])
+        
+        return neighbours
+    
+    def is_within_bounds(board: Board, x, y) -> bool:
+        """Checks if the coordinates are within the board bounds."""
+        return 0 <= x < board.size and 0 <= y < board.size
+
+
+######################################################################################
 
 class TreeNode:
     """Represents a node in the MCTS tree."""
@@ -119,8 +147,93 @@ class MCTS:
         return [Move(tile.x, tile.y) for tile in available_tiles]
 
     def _default_policy(self, board: Board, colour: Colour, legal_moves: list[Move]) -> Move:
-        """Implements a default policy to select a simulation move."""
+        """
+        Implements a default policy to select a simulation move.
+        Checks for basic savebridge template connections to play deterministically.
+        """
+        savebridge_moves = self.savebridge(board, colour, legal_moves)
+        if len(savebridge_moves) > 0:
+            return random.choice(savebridge_moves)
+
         return random.choice(legal_moves)
+    
+    def savebridge(self, board: Board, colour: Colour, legal_moves: list[Move]) -> Move:
+        """
+        Implements the savebridge function to identify and play moves
+        that secure connections using the bridge and wheel templates.
+        Based on the template connection strategy defined in:
+        https://webdocs.cs.ualberta.ca/~mmueller/ps/2013/2013-CG-Mohex2.0.pdf
+
+        Args:
+            board (Board): The current state of the board.
+            colour (Colour): The player's colour.
+            legal_moves (list[Move]): A list of legal moves.
+
+        Returns:
+            Move | None: The move to secure a template connection, or None if no template applies.
+        """
+        # Check for bridge opportunities
+        savebridge_moves = []
+        for move in legal_moves:
+            x, y = move.x, move.y
+            
+            # Look for the bridge template
+            neighbors = Utilities.get_neighbours(board, x, y)
+            for n1, n2 in itertools.combinations(neighbors, 2):
+                # Check if n1 and n2 form a bridge with the current move
+                if (n1.colour == colour and
+                    n2.colour == colour and
+                    self.is_bridge(n1, n2, move)):
+                    savebridge_moves.append(move)
+                
+        # Check for wheel opportunities
+        for move in legal_moves:
+            x, y = move.x, move.y
+            
+            # Check if the move completes a wheel template
+            if self.completes_wheel(board, x, y, colour):
+                savebridge_moves.append(move)
+        
+        return savebridge_moves
+    
+    def is_bridge(self, n1, n2, move):
+        """
+        Checks if n1 and n2, with the given move, form a bridge.
+        
+        Args:
+            n1 (Tile): The first neighbor.
+            n2 (Tile): The second neighbor.
+            move (Move): The move being evaluated.
+        
+        Returns:
+            bool: True if the pattern forms a bridge, False otherwise.
+        """
+        # Bridge condition: Diagonal adjacency with one gap
+        return (abs(n1.x - n2.x) == 2 and abs(n1.y - n2.y) == 2 and
+                (move.x, move.y) == ((n1.x + n2.x) // 2, (n1.y + n2.y) // 2))
+    
+    def completes_wheel(self, board: Board, x: int, y: int, colour: Colour) -> bool:
+        """
+        Checks if placing a tile at (x, y) completes a wheel template.
+        
+        Args:
+            board (Board): The game board.
+            x (int): X-coordinate of the move.
+            y (int): Y-coordinate of the move.
+            colour (Colour): The player's colour.
+        
+        Returns:
+            bool: True if the move completes a wheel, False otherwise.
+        """
+        neighbors = Utilities.get_neighbours(board, x, y)
+        same_coloured_neighbors = [
+            neighbour for neighbour in neighbors
+            if neighbour.colour == colour
+        ]
+        
+        # Wheel condition: At least 3 neighbors of the same colour
+        return len(same_coloured_neighbors) >= 3
+
 
 
 
@@ -152,7 +265,6 @@ class MCTSAgent(AgentBase):
         mcts = MCTS(board, self.colour, turn_length_s=self.turn_length)
         self.tree = mcts.run(self.tree)
         moves = [child.move for child in self.tree.children]
-        logging.info(f"Available moves: {moves}")
 
         x, y = self.tree.move.x, self.tree.move.y
         board.set_tile_colour(x, y, self.colour)
