@@ -2,6 +2,7 @@ import random
 import math
 import time
 from copy import deepcopy
+import logging
 
 from src.AgentBase import AgentBase
 from src.Move import Move
@@ -47,14 +48,17 @@ class MCTS:
 
     def run(self, root: TreeNode):
         """Performs MCTS simulations from the root node."""
+        iterations = 0
         start_time = time.time()
         while time.time() - start_time < self.turn_length:
+            iterations += 1
             node = self._select(root)
             result = self._simulate(node)
             self._backpropagate(node, result)
 
         # Choose the most visited child as the best move
-        return max(root.children, key=lambda child: child.visits).move
+        best_child = max(root.children, key=lambda child: child.visits)
+        return best_child
 
     def _select(self, node: TreeNode):
         """Selects a node to expand using the UCT formula."""
@@ -68,7 +72,7 @@ class MCTS:
         legal_moves = self._get_legal_moves(self.board)
         unvisited_moves = [move for move in legal_moves if move not in [child.move for child in node.children]]
 
-        if unvisited_moves:
+        if len(unvisited_moves) > 0:
             new_move = random.choice(unvisited_moves)
             return node.add_child(new_move)
 
@@ -116,8 +120,6 @@ class MCTS:
 
     def _default_policy(self, board: Board, colour: Colour, legal_moves: list[Move]) -> Move:
         """Implements a default policy to select a simulation move."""
-
-
         return random.choice(legal_moves)
 
 
@@ -126,8 +128,9 @@ class MCTS:
 
 class MCTSAgent(AgentBase):
     """An agent that uses MCTS for Hex."""
+    logger = logging.getLogger(__name__)
 
-    def __init__(self, colour: Colour, turn_length_s: int = 5):
+    def __init__(self, colour: Colour, turn_length_s: int = 1):
         super().__init__(colour)
         self.turn_length = turn_length_s # max length of a turn in seconds
         self.tree = None
@@ -135,25 +138,26 @@ class MCTSAgent(AgentBase):
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """Selects a move using MCTS."""
         if self.tree is None:
+            logging.info("Initialising game tree...")
             self.tree = TreeNode()
 
         if opp_move is not None:
-            # update game tree
+            logging.info("Updating game tree with opponent's move...")
             self.tree = self.update_tree(self.tree, opp_move)
 
             x, y = opp_move.x, opp_move.y
             board.set_tile_colour(x, y, self.colour.opposite())
 
-        mcts = MCTS(board, self.colour, turn_length_s=self.turn_length)
-        best_move = mcts.run(self.tree)
 
-        x, y = best_move.x, best_move.y
+        mcts = MCTS(board, self.colour, turn_length_s=self.turn_length)
+        self.tree = mcts.run(self.tree)
+        moves = [child.move for child in self.tree.children]
+        logging.info(f"Available moves: {moves}")
+
+        x, y = self.tree.move.x, self.tree.move.y
         board.set_tile_colour(x, y, self.colour)
 
-        # update game tree
-        self.tree = self.update_tree(self.tree, best_move)
-
-        return best_move
+        return self.tree.move
     
     def update_tree(self, tree: TreeNode, move: Move):
         """Updates the tree with the opponent's move."""
