@@ -1,39 +1,43 @@
 import tensorflow as tf
 from tensorflow.keras import layers, models #type: ignore
 
+class trainingModel:
+    _boardShape = 11
+    lastNstates = 5
+    model=None
 
-# get board state representation(from alans part)
-boardShape = None
+    def __init__(self):
+        print("define layers here")
 
-# define model structure 
+        inputShape = layers.Input(shape=(self.boardShape*self.boardShape,self.lastNstates))
 
-#todo get board shape
-boardShape = 11
-lastNstates = 5
+        #TODO tweak layers
+        valueHead = layers.Conv2D(1, 1, activation='relu')(inputShape) #as only want one input
+        valueHead = layers.Conv2D(32, 32, activation='relu')(valueHead) # what does 32 define? picked random value for now
+        valueHead = layers.Flatten()(valueHead)
+        valueHead = layers.Dense(1, activation='tanh', name='value')(valueHead)
 
-model = models.Sequential([
-    layers.Input(shape= (boardShape,boardShape,lastNstates)),
-    layers.Conv2D(32, (3, 3), activation='relu'),
-    layers.Conv2D(64, (3, 3), activation='relu'),
-    layers.Flatten(),
-    layers.Dense(128, activation='relu'),
-    layers.Dense(1 + boardShape*boardShape, activation='softmax') 
-    #the first entry is the value head (0-1 chance of winning) all others correspond to probability distribution of the moves.
-])
-model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        policyHead = layers.Conv2D(32, 32, activation='relu')(inputShape)
+        policyHead - layers.Flatten()(policyHead)
+        policyHead = layers.Dense(self._boardShape*self._boardShape, activation='softmax', name='policy')(policyHead)
+        
+        model = models.Model(inputs=inputShape ,outputs=[valueHead, policyHead])
 
-# TODO seperate layer sequence to predict value head and policy head
+    def getHeads(self,boardState):
 
-
-policy = layers.Conv2D(2, 1, activation='relu')(x)
-policy = layers.BatchNormalization()(policy)
-policy = layers.Flatten()(policy)
-policy = layers.Dense(boardShape * boardShape, activation='softmax', name='policy')(policy)
+        #tmp placeholders for jonah
+        value = 1
+        policy = [0]*(self._boardShape*self._boardShape)
+        return(value,policy)
 
 
+    def trainModel():
+        print("TODO")
 
-inputShape = layers.Input(shape=(boardShape,boardShape,lastNstates))
-#model = models.Model(inputs=inputShape ,outputs=[valueHead, policyHead])
+
+
+
+
 
 
 
