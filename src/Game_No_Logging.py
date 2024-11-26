@@ -1,9 +1,5 @@
 import copy
-import logging
-import os
-import sys
 from time import perf_counter_ns as time
-from typing import TextIO
 
 from src.AgentBase import AgentBase
 from src.Board import Board
@@ -11,9 +7,6 @@ from src.Colour import Colour
 from src.EndState import EndState
 from src.Move import Move
 from src.Player import Player
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(format="[%(levelname)s]-%(asctime)s - %(message)s", level=logging.INFO)
 
 
 def format_result(*, player1_name, player2_name, winner, win_method, player_1_move_time, player_2_move_time,
@@ -44,16 +37,13 @@ class Game:
     has_swapped: bool
     players: dict[Colour, Player]
     _turn: int
-    logDest: str | TextIO
+    # logDest: str | TextIO
 
     def __init__(
         self,
         player1: Player,
         player2: Player,
         board_size: int = 11,
-        logDest: str | TextIO = sys.stderr,
-        verbose: bool = False,
-        silent: bool = False,
     ):
         self._turn = 0  # current turn count
         self._board = Board(board_size)
@@ -67,19 +57,6 @@ class Game:
             Colour.RED: self.player1,
             Colour.BLUE: self.player2,
         }
-        # logger.setLevel(logging.DEBUG)
-
-        if verbose:
-            logger.setLevel(logging.DEBUG)
-
-        if silent:
-            logger.setLevel(logging.CRITICAL)
-            logDest = os.devnull
-
-        if logDest != sys.stderr:
-            self.logDest = open(logDest, "w")
-        else:
-            self.logDest = logDest
 
     @property
     def turn(self):
@@ -94,14 +71,14 @@ class Game:
         try:
             assert issubclass(type(self.players[Colour.RED].agent), AgentBase)
             assert issubclass(type(self.players[Colour.BLUE].agent), AgentBase)
-            logger.info("Game started")
             return self._play()
         except Exception as e:
             self._end_game(None)
             print(f"Exception raised: {e}")
         finally:
-            if self.logDest != sys.stderr:
-                self.logDest.close()
+            # if self.logDest != sys.stderr:
+            #    self.logDest.close()
+            pass
 
     def _play(self) -> dict[str, str]:
         """Main method for a match.
@@ -122,9 +99,6 @@ class Game:
             self._turn += 1
             currentPlayer: Player = self.players[self.current_player]
             playerAgent = currentPlayer.agent
-            logger.info(f"Turn {self.turn}: player {currentPlayer.name}")
-            # logger.info(f"Starting Board:\n{str(self.board)}")
-            self.board.print_with_colour()
             currentPlayer.turn += 1
 
             boardCopy = copy.deepcopy(self.board)
@@ -143,24 +117,17 @@ class Game:
             assert end > start, "Move time is negative, Possible cheating!"
 
             currentPlayer.move_time += end - start
-            logger.debug(f"Player {currentPlayer.name}; Move time: {currentPlayer.move_time}ns")
-            logger.info(f"Player {currentPlayer.name}; Move: {self.current_player}{m}")
             if currentPlayer.move_time > Game.MAXIMUM_TIME:
-                logger.info(f"Player {currentPlayer.name} timed out")
                 endState = EndState.TIMEOUT
                 break
             if self.is_valid_move(m, self.turn, self.board):
-                logger.debug("Move is valid")
                 self._make_move(m)
                 opponentMove = m
             else:
-                logger.info(f"Player {currentPlayer.name} made an illegal move")
                 endState = EndState.BAD_MOVE
                 break
             if self.board.has_ended(self.current_player):
                 break
-
-            #logger.info(f"Turn Ending Board:\n{str(self.board)}")
 
             self.current_player = Colour.opposite(self.current_player)
         return self._end_game(endState)
@@ -175,21 +142,11 @@ class Game:
             )
             self.players[Colour.RED].agent.colour = Colour.RED
             self.players[Colour.BLUE].agent.colour = Colour.BLUE
-            logger.debug("This is a swap move.")
-            logger.debug(f"{self.players[Colour.RED].name} colour:{self.players[Colour.RED].agent.colour.name}")
-            logger.debug(f"{self.players[Colour.BLUE].name}, colour:{self.players[Colour.BLUE].agent.colour.name}")
 
             self.current_player = Colour.opposite(self.current_player)
             self.has_swapped = True
         else:
             self.board.set_tile_colour(m.x, m.y, self.current_player)
-
-        logger.debug(f"Move made: {m}")
-        current_player = self.players[self.current_player]
-        print(
-            f"{self.turn},{current_player.name},{self.current_player.name}{m},{current_player.move_time}",
-            file=self.logDest,
-        )
 
     def _end_game(self, status: EndState) -> dict[str, str]:
         """Wraps up the game and prints results to shell, log and
@@ -197,38 +154,22 @@ class Game:
         """
         # calculate total time elapsed
         total_time = time() - self._start_time
-
-        logger.info("Game over")
-        # logger.info(f"Final Board:\n{str(self.board)}")
-        self.board.print_with_colour()
-        logger.info(f"Total time: {Game.ns_to_s(total_time)}s")
         winner = None
 
         match status:
             case EndState.WIN:
                 # last move overcounts
-                logger.info(f"Player {self.players[self.current_player].name} has won")
                 winner = self.players[self.current_player].name
             case EndState.BAD_MOVE:
                 # the player printed is the winner
-                logger.info(f"Player {self.players[self.current_player].name} made an illegal move")
-                logger.info(f"Player {self.players[self.current_player.opposite()].name} has won")
                 winner = self.players[self.current_player.opposite()].name
 
             case EndState.TIMEOUT:
                 # the player printed is the winner
                 # last move overcounts
-                logger.info(f"Player {self.players[self.current_player].name} has timed out")
-                logger.info(f"Player {self.players[self.current_player.opposite()].name} has won")
                 winner = self.players[self.current_player.opposite()].name
             case _:
-                logger.error("Game ended abnormally")
                 raise Exception("Game ended abnormally")
-
-        for p in self.players.values():
-            print(f"{p.name},{p.move_time}", file=self.logDest)
-        print(f"winner,{winner},{status.name}", file=self.logDest)
-        logger.info(f"Total Game Time: {Game.ns_to_s(total_time)}s")
 
         return format_result(
             player1_name=self.player1.name,
