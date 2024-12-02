@@ -12,7 +12,7 @@ class MCTSAgent(AgentBase):
     """An agent that uses MCTS for Hex."""
     logger = logging.getLogger(__name__)
 
-    def __init__(self, colour: Colour, turn_length_s: int = 3):
+    def __init__(self, colour: Colour, turn_length_s: int = 1):
         super().__init__(colour)
         self.turn_length = turn_length_s # max length of a turn in seconds
         self.tree = None
