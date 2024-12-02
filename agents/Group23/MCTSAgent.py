@@ -40,22 +40,29 @@ class Utilities:
 class TreeNode:
     """Represents a node in the MCTS tree."""
 
-    def __init__(self, move=None, parent=None):
+    def __init__(self, move=None, parent=None, player=None):
         self.move = move  # The move that led to this node
         self.parent = parent  # Parent node
         self.children = []  # List of child nodes
         self.visits = 0  # Number of times this node has been visited
         self.wins = 0  # Number of wins from this node
+        self.q_rave = 0  # times this move has been critical in a rollout
+        self.n_rave = 0  # times this move has been played in a rollout
+        self.player = player
+        self.rave_const = 300
+        
+        if parent is not None:
+            self.player = parent.player.opposite()
 
     def is_fully_expanded(self, legal_moves):
         """Checks if all possible moves have been expanded."""
         return len(self.children) == len(legal_moves)
 
-    def best_child(self, exploration_param=math.sqrt(2)):
+    def best_child(self, explore=math.sqrt(2)):
         """Selects the best child using UCT."""
         return max(
             self.children,
-            key=lambda child: (child.wins / child.visits) + exploration_param * math.sqrt(math.log(self.visits) / child.visits)
+            key=lambda child: self.__value__(child, explore)
         )
 
     def add_child(self, move):
@@ -63,6 +70,19 @@ class TreeNode:
         child_node = TreeNode(move, parent=self)
         self.children.append(child_node)
         return child_node
+    
+    def __value__(self, child, explore=math.sqrt(2), heuristic='uct'):
+        uct = (child.wins / child.visits) + explore * math.sqrt(math.log(self.visits) / child.visits)
+
+        if heuristic == 'uct':
+            return uct
+        elif heuristic == 'rave':
+            alpha = max(0, (self.rave_const - self.N) / self.rave_const)
+            amaf = self.q_rave / self.n_rave if self.n_rave != 0 else 0
+            rave = (1 - alpha) * uct + alpha * amaf
+            return rave
+
+        return self.wins / self.visits if self.visits != 0 else 0
     
 ######################################################################################
 
@@ -81,8 +101,8 @@ class MCTS:
         while time.time() - start_time < self.turn_length:
             iterations += 1
             node = self._select(root)
-            result = self._simulate(node)
-            self._backpropagate(node, result)
+            result, self_rave_pts, opp_rave_points = self._simulate(node)
+            self._backpropagate(node, result, self_rave_pts, opp_rave_points)
 
         # Choose the most visited child as the best move
         best_child = max(root.children, key=lambda child: child.visits)
@@ -107,32 +127,73 @@ class MCTS:
         return node
 
     def _simulate(self, node: TreeNode):
-        """Simulates a random game from the current node and returns the result."""
+        """
+        Simulates a random game from the current node and returns the result.
+        Args:
+            node (TreeNode): The node to simulate from.
+        Returns:
+            int: The result of the simulation. (-1 for loss, 1 for win)
+        """
         simulation_board = deepcopy(self.board)  # Create a copy of the board
         x, y = node.move.x, node.move.y
         simulation_board.set_tile_colour(x, y, self.colour)  # Play the move
 
         # Play randomly until the game ends
         current_colour = self.colour.opposite()
+        legal_moves = self._get_legal_moves(simulation_board)
         while (not simulation_board.has_ended(colour=current_colour) and
                not simulation_board.has_ended(colour=current_colour.opposite())):
-            legal_moves = self._get_legal_moves(simulation_board)
 
             move = self._default_policy(simulation_board, current_colour, legal_moves)
 
             x, y = move.x, move.y
             simulation_board.set_tile_colour(x, y, current_colour)
             current_colour = current_colour.opposite()
+            legal_moves.remove(move)
 
-        return 1 if simulation_board.get_winner() == self.colour else 0
+        opp_rave_pts = []
+        self_rave_pts = []
 
-    def _backpropagate(self, node: TreeNode, result: int):
-        """Backpropagates the simulation result through the tree."""
+        # Record critical cells for RAVE
+        for x in range(simulation_board.size):
+            for y in range(simulation_board.size):
+                tile = simulation_board.tiles[x][y]
+                if tile.colour == self.colour:
+                    self_rave_pts.append((x, y))
+                elif tile.colour == self.colour.opposite():
+                    opp_rave_pts.append((x, y))
+        
+        game_value = 1 if simulation_board.get_winner() == self.colour else -1
+
+        return game_value, self_rave_pts, opp_rave_pts
+
+    def _backpropagate(self, node: TreeNode, result: int, self_rave_pts: list[tuple[int, int]], opp_rave_pts: list[tuple[int, int]]):
+        """
+        Backpropagates the simulation result through the tree.
+        Args:
+            node (TreeNode): The node to backpropagate from.
+            result (int): The result of the simulation. (-1 for loss, 1 for win)
+        """
         while node is not None:
+            
+            children = [(child.move.x, child.move.y) for child in node.children]
+            if node.player == self.colour:
+                for point in self_rave_pts:
+                    if point in children:
+                        i = children.index(point)
+                        node.children[i].q_rave += -result
+                        node.children[i].n_rave += 1
+            else:
+                for point in opp_rave_pts:
+                    if point in children:
+                        i = children.index(point)
+                        node.children[i].q_rave += -result
+                        node.children[i].n_rave += 1
+
             node.visits += 1
             node.wins += result
+            result = -result
             node = node.parent
-            result = 1 - result  # Invert the result for the opponent's perspective
 
     def _get_legal_moves(self, board: Board) -> list[Move]:
         available_tiles = []
@@ -250,21 +311,19 @@ class MCTSAgent(AgentBase):
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """Selects a move using MCTS."""
-        if self.tree is None:
+        if self.tree is None and opp_move is not None:
             logging.info("Initialising game tree...")
-            self.tree = TreeNode()
-
-        if opp_move is not None:
-            logging.info("Updating game tree with opponent's move...")
+            self.tree = TreeNode(player=self.colour.opposite())
             self.tree = self.update_tree(self.tree, opp_move)
 
             x, y = opp_move.x, opp_move.y
             board.set_tile_colour(x, y, self.colour.opposite())
-
+        elif self.tree is None:
+            logging.info("Initialising game tree...")
+            self.tree = TreeNode(player=self.colour)
 
         mcts = MCTS(board, self.colour, turn_length_s=self.turn_length)
         self.tree = mcts.run(self.tree)
-        moves = [child.move for child in self.tree.children]
 
         x, y = self.tree.move.x, self.tree.move.y
         board.set_tile_colour(x, y, self.colour)
