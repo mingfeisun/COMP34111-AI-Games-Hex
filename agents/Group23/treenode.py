@@ -27,4 +27,11 @@ class TreeNode:
         self.children.append(child_node)
         return child_node
     
+    def get_child(self, move):
+        """Gets the child node for a move."""
+        for child in self.children:
+            if child.move == move:
+                return child
+        return None
+    
 ######################################################################################

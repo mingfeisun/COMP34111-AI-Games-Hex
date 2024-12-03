@@ -7,6 +7,7 @@ from src.Colour import Colour
 
 from agents.Group23.treenode import TreeNode
 from agents.Group23.mcts import MCTS
+from agents.Group23.utilities import Utilities
 
 class MCTSAgent(AgentBase):
     """An agent that uses MCTS for Hex."""
@@ -29,6 +30,8 @@ class MCTSAgent(AgentBase):
         elif self.tree is None:
             logging.info("Initialising game tree...")
             self.tree = TreeNode(player=self.colour)
+        elif opp_move is not None:
+            self.tree = self.update_tree(self.tree, opp_move)
 
         mcts = MCTS(board, self.colour, turn_length_s=self.turn_length)
         self.tree = mcts.run(self.tree)
@@ -45,5 +48,6 @@ class MCTSAgent(AgentBase):
                 return child
         
         # If the move is not in the tree, create a new node
+        logging.warning(f"Opponent's move not found in the tree. Creating a new node.")
         return TreeNode(parent=tree, move=move)
 
