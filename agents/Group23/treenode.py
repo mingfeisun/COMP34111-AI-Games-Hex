@@ -3,7 +3,7 @@ import math
 class TreeNode:
     """Represents a node in the MCTS tree."""
 
-    def __init__(self, move=None, parent=None):
+    def __init__(self, move=None, parent=None, player=None):
         self.move = move  # The move that led to this node
         self.parent = parent  # Parent node
         self.children = []  # List of child nodes

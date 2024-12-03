@@ -28,6 +28,8 @@ class MCTS:
             result = self._simulate(node)
             self._backpropagate(node, result)
 
+        print(f'Ran {iterations} simulations in {time.time() - start_time:.2f}s')
+
         # Choose the most visited child as the best move
         best_child = max(root.children, key=lambda child: child.visits)
         return best_child
