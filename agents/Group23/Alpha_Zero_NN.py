@@ -72,8 +72,7 @@ class Alpha_Zero_NN:
             metrics={
                 'value_head': 'mean_absolute_error',
                 'policy_head': 'accuracy',
-            },
-            validation_split=0.2
+            }
         )
         
         model.summary()
@@ -90,12 +89,7 @@ class Alpha_Zero_NN:
         """
         self._game_experience.append((board_states, z_values, mcts_probs))
 
-    def get_input_output_arrays(self):
-        """Gets the input and output arrays for the model
-
-        Returns:
-            np.array: The input and output arrays for the experience data
-        """
+    def get_train_val_data(self, validation_split=0.2):
         board_states = [
             board_state for game in self._game_experience for board_state in game[0]
         ]
@@ -108,25 +102,46 @@ class Alpha_Zero_NN:
             mcts_prob for game in self._game_experience for mcts_prob in game[2]
         ]
 
-        board_states = np.array(board_states)
-        z_values = np.array(z_values)
-        mcts_probs = np.array(mcts_probs)
+        zip_data = list(zip(board_states, z_values, mcts_probs))
+        np.random.shuffle(zip_data)
 
-        return board_states, z_values, mcts_probs
+        split_index = int(len(zip_data) * (1 - validation_split))
+        training_data = zip_data[:split_index]
+        validation_data = zip_data[split_index:]
+
+        train_board_states, train_z_values, train_mcts_probs = zip(*training_data)
+        train_board_states = np.array(train_board_states)
+        train_z_values = np.array(train_z_values)
+        train_mcts_probs = np.array(train_mcts_probs)
+
+        val_board_states, val_z_values, val_mcts_probs = zip(*validation_data)
+        val_board_states = np.array(val_board_states)
+        val_z_values = np.array(val_z_values)
+        val_mcts_probs = np.array(val_mcts_probs)
+
+
+        return train_board_states, train_z_values, train_mcts_probs, val_board_states, val_z_values, val_mcts_probs
     
-    def train(self):
+    def train(self, validation_split = 0.2):
         """Trains the model with the given data
         """
-        board_states, z_values, mcts_probs = self.get_input_output_arrays()
+        train_board_states, train_z_values, train_mcts_probs, val_board_states, val_z_values, val_mcts_probs = self.get_train_val_data(validation_split)
 
         self.model.fit(
-            x=board_states,
+            x=train_board_states,
             y={
-                'value_head': z_values,
-                'policy_head': mcts_probs
+                'value_head': train_z_values,
+                'policy_head': train_mcts_probs
             },
             batch_size=64,
-            epochs=10
+            epochs=10,
+            validation_data=(
+                val_board_states,
+                {
+                    'value_head': val_z_values,
+                    'policy_head': val_mcts_probs
+                }
+            )
         )
         
 
