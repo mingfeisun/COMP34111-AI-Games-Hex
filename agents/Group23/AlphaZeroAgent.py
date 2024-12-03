@@ -2,6 +2,7 @@ from src.AgentBase import AgentBase
 from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
+from agents.Group23.Alpha_Zero_NN import Alpha_Zero_NN
 
 from agents.TestAgents.utils import make_valid_move
 
@@ -13,7 +14,7 @@ class AlphaZeroAgent(AgentBase):
     _agent_in_training = False # flag to indicate if agent is in training mode
 
 
-    def __init__(self, colour: Colour, custom_trained_network=None):
+    def __init__(self, colour: Colour, custom_trained_network: Alpha_Zero_NN = None):
         super().__init__(colour)
         if custom_trained_network is not None:
             self._trained_policy_value_network = custom_trained_network

@@ -1,3 +1,4 @@
+from agents.Group23 import mcts
 from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
@@ -5,18 +6,19 @@ from agents.Group23.AlphaZeroAgent import AlphaZeroAgent
 from src.Colour import Colour
 from src.Game import Game
 from src.Player import Player
+from agents.Group23.Alpha_Zero_NN import Alpha_Zero_NN
 
 class alpha_zero_self_play_loop:
     _board_size: int = 11
-    _board_history = []
     _Student_Network = None
     _Teacher_Network = None
-    _max_games = 10
+    _max_games_per_simulation = 10
+    _simulation_iterations = 100
     _game_log_location = "alpha_zero_self_play.log"
 
     def __init__(self):
-        self._Student_Network = ...
-        self._Teacher_Network = ...
+        self._Student_Network = Alpha_Zero_NN(board_size=self._board_size)
+        self._Teacher_Network = Alpha_Zero_NN(board_size=self._board_size)
 
     def set_up_game(self):
         g = Game(
@@ -41,33 +43,36 @@ class alpha_zero_self_play_loop:
         current_game = self.set_up_game()
         current_game.run()
 
-        board_state = current_game.board.tiles
         winner_colour = current_game.board.get_winner()
 
-        if winner_colour == Colour.RED:
-            return {
-                "z": 1,
-                "board_state": board_state
-            }
-        
-        if winner_colour == Colour.BLUE:
-            return  {
-                "z": -1,
-                "board_state": board_state
-            }
-        
-        Exception("Invalid winner colour returned from self play game")
+        return winner_colour
 
 
     def _run(self):
-        for i in range(self._max_games):
-            print(f"Game {i+1} of {self._max_games}")
-            game_result = self._simulate_game()
-            self._board_history.append(game_result)
+        for sim_iter in range(self._simulation_iterations):
+            print(f"Simulation iteration {sim_iter+1} of {self._simulation_iterations}")
 
-            print(f"Student network won: {game_result['z'] == 1}")
-            if game_result["z"] == -1:
+            win_count = 0
+
+            for i in range(self._max_games_per_simulation):
+                print(f"Game {i+1} of {self._max_games_per_simulation}")
+                winner_colour = self._simulate_game()
+
+                print(f"Student network won: {winner_colour == Colour.RED}")
+                if winner_colour == Colour.RED:
+                    win_count += 1
+
+                self._Student_Network._commit_experience_from_buffer(winner_colour=Colour.RED)
+
+            # check majority win rate and swap networks if necessary
+            if win_count > self._max_games_per_simulation / 2:
                 self._swap_student_teacher_networks()
+
+            # train student network
+            self._Student_Network._train()
+            
+
+            
 
 
     def _swap_student_teacher_networks(self):

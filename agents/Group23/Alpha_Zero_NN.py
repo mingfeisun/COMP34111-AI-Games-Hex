@@ -1,12 +1,14 @@
 import numpy as np
 from tensorflow.keras.layers import Dense, Flatten, Conv2D, BatchNormalization, GlobalAveragePooling2D
 from tensorflow.keras import Input, Model
-import tensorflow as tf 
+import tensorflow as tf
+from src.Colour import Colour
 
 class Alpha_Zero_NN:
     _board_size = 11 # default board size
     _model = None # current model
     _game_experience = [] # list of game experience
+    _experience_data_buffer = []
 
     def __init__(self, board_size:int):
         """Initializes the AlphaZero neural network model
@@ -79,15 +81,38 @@ class Alpha_Zero_NN:
 
         return model
     
-    def add_game_experience(self, board_states:list[list[list[int]]], z_values:list[float], mcts_probs:list[list[float]]):
-        """Adds the game experience to the list of game experience
+    def _add_experience_to_buffer(self, board_state:list[int], mcts_prob:list[float], player_colour:Colour):
+        """Add single experience to the buffer
 
         Args:
-            board_states (list[list[list[int]]]): experienced board states
-            z_values (list[float]): associated z values with the board states
-            mcts_probs (list[list[float]]): associated mcts probabilities with the board states
+            board_state (list[int]): current_board_state
+            mcts_prob (list[float]): mcts_probabilities
+            player_colour (Colour): player colour
         """
-        self._game_experience.append((board_states, z_values, mcts_probs))
+        self._experience_data_buffer.append((board_state, mcts_prob, player_colour))
+
+    def _commit_experience_from_buffer(self, winner_colour:float):
+        """Commit experience from buffer to game experience
+
+        Args:
+            winner_colour (float): game winner to update z values
+        """
+        board_states = []
+        z_values = []
+        mcts_probs = []
+
+        for board_state, mcts_prob, player_colour in self._experience_data_buffer:
+            board_states.append(board_state)
+            mcts_probs.append(mcts_prob)
+
+            if player_colour == winner_colour:
+                z_values.append(1)
+            else:
+                z_values.append(-1)
+
+        for i in range(len(board_states)):
+            self._game_experience.append((board_states[i], z_values[i], mcts_probs[i]))
+
 
     def get_train_val_data(self, validation_split=0.2):
         board_states = [
@@ -122,9 +147,13 @@ class Alpha_Zero_NN:
 
         return train_board_states, train_z_values, train_mcts_probs, val_board_states, val_z_values, val_mcts_probs
     
-    def train(self, validation_split = 0.2):
+    def _train(self, validation_split = 0.2):
         """Trains the model with the given data
         """
+        if len(self._game_experience) == 0:
+            print("No game experience to train on")
+            return
+
         train_board_states, train_z_values, train_mcts_probs, val_board_states, val_z_values, val_mcts_probs = self.get_train_val_data(validation_split)
 
         self.model.fit(
