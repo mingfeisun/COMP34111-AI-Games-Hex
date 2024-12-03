@@ -1,7 +1,4 @@
-from agents.Group23 import mcts
-from src.Board import Board
 from src.Colour import Colour
-from src.Move import Move
 from agents.Group23.AlphaZeroAgent import AlphaZeroAgent
 from src.Colour import Colour
 from src.Game import Game
@@ -70,10 +67,6 @@ class alpha_zero_self_play_loop:
 
             # train student network
             self._Student_Network._train()
-            
-
-            
-
 
     def _swap_student_teacher_networks(self):
         # swap student and teacher networks
