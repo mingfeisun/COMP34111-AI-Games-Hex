@@ -9,12 +9,15 @@ class AlphaZeroAgent(AgentBase):
 
     _board_size: int = 11
     _board_history = []
-    _trained_policy_value_network = None
+    _trained_policy_value_network = None # store a trained policy and value network
+    _agent_in_training = False # flag to indicate if agent is in training mode
 
 
     def __init__(self, colour: Colour, custom_trained_network=None):
         super().__init__(colour)
-        self._trained_policy_value_network = custom_trained_network
+        if custom_trained_network is not None:
+            self._trained_policy_value_network = custom_trained_network
+            self._agent_in_training = True
 
     def get_input_vector(self, board: Board) -> list[int]:
         """generate input vector for neural network
