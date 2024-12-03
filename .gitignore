@@ -162,3 +162,5 @@ cython_debug/
 #.idea/
 
 .bash_history
+.vscode/settings.json
+/agents/Group25-AZ/azsrc/.vscode
