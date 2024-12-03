@@ -1,14 +1,88 @@
 import logging
+import math
 
 from src.AgentBase import AgentBase
 from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
-from agents.Group23.Alpha_Zero_NN import Alpha_Zero_NN
+from src.Tile import Tile
 
-from agents.TestAgents.utils import make_valid_move
-from agents.Group23.treenode import TreeNode
+from agents.Group23.Alpha_Zero_NN import Alpha_Zero_NN
 from agents.Group23.mcts import MCTS
+
+class Utilities:
+    RELATIVE_NEIGHBOURS = [
+        (-1, -1), (-1, 0), # row above
+        (0, -1), (0, 1), # same row
+        (1, 0), (1, 1) # row below
+    ]
+
+    def get_neighbours(board: Board, x, y) -> list[Tile]:
+        """Returns a list of all neighbouring tiles."""
+        neighbours = []
+        for offset in Utilities.RELATIVE_NEIGHBOURS:
+            x_offset, y_offset = offset
+            x_n, y_n = x + x_offset, y + y_offset
+
+            if Utilities.is_within_bounds(board, x_n, y_n):
+                neighbours.append(board.tiles[x_n][y_n])
+        
+        return neighbours
+    
+    def is_within_bounds(board: Board, x, y) -> bool:
+        """Checks if the coordinates are within the board bounds."""
+        return 0 <= x < board.size and 0 <= y < board.size
+
+
+######################################################################################
+
+class TreeNode:
+    """Represents a node in the MCTS tree."""
+
+    def __init__(self, move=None, parent=None, player=None):
+        self.move = move  # The move that led to this node
+        self.parent = parent  # Parent node
+        self.children = []  # List of child nodes
+        self.visits = 0  # Number of times this node has been visited
+        self.wins = 0  # Number of wins from this node
+        self.q_rave = 0  # times this move has been critical in a rollout
+        self.n_rave = 0  # times this move has been played in a rollout
+        self.player = player
+        self.rave_const = 300
+        
+        if parent is not None:
+            self.player = parent.player.opposite()
+
+    def is_fully_expanded(self, legal_moves):
+        """Checks if all possible moves have been expanded."""
+        return len(self.children) == len(legal_moves)
+
+    def best_child(self, explore=math.sqrt(2)):
+        """Selects the best child using UCT."""
+        return max(
+            self.children,
+            key=lambda child: self.__value__(child, explore)
+        )
+
+    def add_child(self, move):
+        """Adds a child node for a move."""
+        child_node = TreeNode(move, parent=self)
+        self.children.append(child_node)
+        return child_node
+    
+    def __value__(self, child, explore=math.sqrt(2), heuristic='uct'):
+        uct = (child.wins / child.visits) + explore * math.sqrt(math.log(self.visits) / child.visits)
+
+        if heuristic == 'uct':
+            return uct
+        elif heuristic == 'rave':
+            alpha = max(0, (self.rave_const - self.N) / self.rave_const)
+            amaf = self.q_rave / self.n_rave if self.n_rave != 0 else 0
+            rave = (1 - alpha) * uct + alpha * amaf
+            return rave
+
+        return self.wins / self.visits if self.visits != 0 else 0
+    
 
 class AlphaZeroAgent(AgentBase):
     logger = logging.getLogger(__name__)
@@ -16,16 +90,16 @@ class AlphaZeroAgent(AgentBase):
     _board_size: int = 11
     _trained_policy_value_network = None # store a trained policy and value network
     _agent_in_training = False # flag to indicate if agent is in training mode
-    _tree = None
-    _turn_length = 1
+    tree = None
+    turn_length = 1
 
     def __init__(self, colour: Colour, custom_trained_network: Alpha_Zero_NN = None, turn_length_s: int = 1):
         super().__init__(colour)
         if custom_trained_network is not None:
             self._trained_policy_value_network = custom_trained_network
             self._agent_in_training = True
-        self._turn_length = turn_length_s # max length of a turn in seconds
-        self._tree = None # MCTS tree
+        self.turn_length = turn_length_s # max length of a turn in seconds
+        self.tree = None # MCTS tree
 
     def get_board_vector(self, board: Board) -> list[list[int]]:
         """generate input vector for neural network
@@ -66,26 +140,24 @@ class AlphaZeroAgent(AgentBase):
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
 
-        if self._tree is None and opp_move is not None:
+        if self.tree is None and opp_move is not None:
             logging.info("Initialising game tree...")
-            self._tree = TreeNode(player=self.colour.opposite())
-            self._tree = self.update_tree(self._tree, opp_move)
+            self.tree = TreeNode(player=self.colour.opposite())
+            self.tree = self.update_tree(self.tree, opp_move)
 
             x, y = opp_move.x, opp_move.y
             board.set_tile_colour(x, y, self.colour.opposite())
-        elif self._tree is None:
+        elif self.tree is None:
             logging.info("Initialising game tree...")
-            self._tree = TreeNode(player=self.colour)
+            self.tree = TreeNode(player=self.colour)
 
-        mcts = MCTS(board, self.colour, turn_length_s=self._turn_length)
-        self._tree = mcts.run(self._tree)
+        mcts = MCTS(board, self.colour, turn_length_s=self.turn_length)
+        self.tree = mcts.run(self.tree)
 
-        x, y = self._tree.move.x, self.tree.move.y
+        x, y = self.tree.move.x, self.tree.move.y
         board.set_tile_colour(x, y, self.colour)
 
-        # self._record_experience(board, self._tree.mcts_probs)
-
-        return self._tree.move
+        return self.tree.move
     
     def update_tree(self, tree: TreeNode, move: Move):
         """Updates the tree with the opponent's move."""
@@ -95,3 +167,4 @@ class AlphaZeroAgent(AgentBase):
         
         # If the move is not in the tree, create a new node
         return TreeNode(parent=tree, move=move)
+    
