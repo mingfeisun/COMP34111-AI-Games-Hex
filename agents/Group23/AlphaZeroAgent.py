@@ -9,9 +9,12 @@ class AlphaZeroAgent(AgentBase):
 
     _board_size: int = 11
     _board_history = []
+    _trained_policy_value_network = None
 
-    def __init__(self, colour: Colour):
+
+    def __init__(self, colour: Colour, custom_trained_network=None):
         super().__init__(colour)
+        self._trained_policy_value_network = custom_trained_network
 
     def get_input_vector(self, board: Board) -> list[int]:
         """generate input vector for neural network
@@ -54,7 +57,7 @@ class AlphaZeroAgent(AgentBase):
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         input_vector = self.get_input_vector(board)
-        print(input_vector)
+        # print(input_vector)
 
         if turn == 2:
             return Move(-1, -1)
