@@ -1,14 +1,22 @@
+import os
 import numpy as np
 from tensorflow.keras.layers import Dense, Flatten, Conv2D, BatchNormalization, GlobalAveragePooling2D
 from tensorflow.keras import Input, Model
 import tensorflow as tf
+import pandas as pd
 from src.Colour import Colour
+import ast
 
 class Alpha_Zero_NN:
     _board_size = 11 # default board size
     _model = None # current model
-    _game_experience = [] # list of game experience
     _experience_data_buffer = []
+
+    def load_experience_from_file(self, path:str):
+        if os.path.exists("experience.txt"):
+            return pd.read_csv("experience.txt")
+        else:
+            return pd.DataFrame(columns=['board_state', 'mcts_prob', 'z_value'])
 
     def __init__(self, board_size:int):
         """Initializes the AlphaZero neural network model
@@ -18,6 +26,8 @@ class Alpha_Zero_NN:
         """
         self._board_size = board_size
         self._model = self._create_model()
+
+        self._train()
 
     def _create_policy_head(self, input_layer:tf.Tensor) -> tf.Tensor:
         """Creates the policy head of the model
@@ -91,72 +101,82 @@ class Alpha_Zero_NN:
         """
         self._experience_data_buffer.append((board_state, mcts_prob, player_colour))
 
+    def save_experience_to_file(self, path:str, _game_experience:pd.DataFrame):
+        """Save batch experience to file
+
+        Args:
+            path (str): path to save the file
+        """
+        _game_experience.to_csv(path, index=False)
+
     def _commit_experience_from_buffer(self, winner_colour:float):
         """Commit experience from buffer to game experience
 
         Args:
             winner_colour (float): game winner to update z values
         """
-        board_states = []
-        z_values = []
-        mcts_probs = []
+
+        _game_experience = self.load_experience_from_file("experience.txt")
 
         for board_state, mcts_prob, player_colour in self._experience_data_buffer:
-            board_states.append(board_state)
-            mcts_probs.append(mcts_prob)
 
             if player_colour == winner_colour:
-                z_values.append(1)
+                new_row = [board_state, mcts_prob, 1]
+                _game_experience = pd.concat([_game_experience, pd.DataFrame([new_row], columns=_game_experience.columns)])
             else:
-                z_values.append(-1)
+                new_row = [board_state, mcts_prob, -1]
+                _game_experience = pd.concat([_game_experience, pd.DataFrame([new_row], columns=_game_experience.columns)])
 
-        for i in range(len(board_states)):
-            self._game_experience.append((board_states[i], z_values[i], mcts_probs[i]))
+        self.save_experience_to_file("experience.txt", _game_experience)
+
+        self._experience_data_buffer = [] # clear buffer
 
 
     def get_train_val_data(self, validation_split=0.2):
-        board_states = [
-            board_state for game in self._game_experience for board_state in game[0]
-        ]
+        _game_experience = self.load_experience_from_file("experience.txt")
 
-        z_values = [
-            z_value for game in self._game_experience for z_value in game[1]
-        ]
+        if len(_game_experience) == 0:
+            return [], [], [], [], [], []
+        
+        training_data = _game_experience.sample(frac=1-validation_split)
+        validation_data = _game_experience.drop(training_data.index)
 
-        mcts_probs = [
-            mcts_prob for game in self._game_experience for mcts_prob in game[2]
-        ]
+        # Convert board_state from string to array
+        train_board_states = training_data['board_state'].apply(ast.literal_eval).tolist()
+        train_z_values = training_data['z_value']
+        train_mcts_probs = training_data['mcts_prob'].apply(ast.literal_eval).tolist()
 
-        zip_data = list(zip(board_states, z_values, mcts_probs))
-        np.random.shuffle(zip_data)
+        val_board_states = validation_data['board_state'].apply(ast.literal_eval).tolist()
+        val_z_values = validation_data['z_value']
+        val_mcts_probs = validation_data['mcts_prob'].apply(ast.literal_eval).tolist()
 
-        split_index = int(len(zip_data) * (1 - validation_split))
-        training_data = zip_data[:split_index]
-        validation_data = zip_data[split_index:]
+        print(f"Training data size: {len(train_board_states)}")
+        print(f"Validation data size: {len(val_board_states)}")
 
-        train_board_states, train_z_values, train_mcts_probs = zip(*training_data)
         train_board_states = np.array(train_board_states)
         train_z_values = np.array(train_z_values)
         train_mcts_probs = np.array(train_mcts_probs)
+        train_mcts_probs_flattened = [sample.ravel().tolist() for sample in train_mcts_probs]
+        train_mcts_probs_flattened = np.array(train_mcts_probs_flattened)
 
-        val_board_states, val_z_values, val_mcts_probs = zip(*validation_data)
         val_board_states = np.array(val_board_states)
         val_z_values = np.array(val_z_values)
         val_mcts_probs = np.array(val_mcts_probs)
+        val_mcts_probs_flattened = [sample.ravel().tolist() for sample in val_mcts_probs]
+        val_mcts_probs_flattened = np.array(val_mcts_probs_flattened)
 
-
-        return train_board_states, train_z_values, train_mcts_probs, val_board_states, val_z_values, val_mcts_probs
+        return train_board_states, train_z_values, train_mcts_probs_flattened, val_board_states, val_z_values, val_mcts_probs_flattened
     
     def _train(self, validation_split = 0.2):
         """Trains the model with the given data
         """
-        if len(self._game_experience) == 0:
-            print("No game experience to train on")
-            return
-
         train_board_states, train_z_values, train_mcts_probs, val_board_states, val_z_values, val_mcts_probs = self.get_train_val_data(validation_split)
 
-        self.model.fit(
+        if len(train_board_states) == 0:
+            print("No training data available")
+            return
+
+        self._model.fit(
             x=train_board_states,
             y={
                 'value_head': train_z_values,

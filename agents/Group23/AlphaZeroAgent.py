@@ -33,9 +33,6 @@ class TreeNode:
 
     def best_child(self, explore=math.sqrt(2)):
         """Selects the best child using UCT."""
-        self.visits += 1
-        print(self.visits)
-
         return max(
             self.children,
             key=lambda child: self.__value__(child, explore)
@@ -70,7 +67,7 @@ class AlphaZeroAgent(AgentBase):
     tree = None
     turn_length = 2
 
-    def __init__(self, colour: Colour, custom_trained_network: Alpha_Zero_NN = None, turn_length_s: int = 2):
+    def __init__(self, colour: Colour, custom_trained_network: Alpha_Zero_NN = None, turn_length_s: int = 1):
         super().__init__(colour)
         if custom_trained_network is not None:
             self._trained_policy_value_network = custom_trained_network
@@ -114,8 +111,8 @@ class AlphaZeroAgent(AgentBase):
             mcts_probs (list[list[float]]): mcts probabilities for the given board state
         """
         print(f"Recording experience ({self.colour})")
-        board_state = self.get_board_vector(board_state)
-        self._trained_policy_value_network._add_experience_to_buffer(board_state, mcts_probs, self.colour)
+        board_vector_state = self.get_board_vector(board_state)
+        self._trained_policy_value_network._add_experience_to_buffer(board_vector_state, mcts_probs, self.colour)
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
 
@@ -131,13 +128,16 @@ class AlphaZeroAgent(AgentBase):
             self.tree = TreeNode(player=self.colour)
 
         mcts = MCTS(board, self.colour, turn_length_s=self.turn_length)
-        self.tree, visit_count_normalised_distribution = mcts.run(self.tree)
+        self.tree, visit_count_normalised_distribution = mcts.run(self.tree, )
+
+        if self._agent_in_training:
+            # add data to training buffer before modifying board
+            self._record_experience(board, visit_count_normalised_distribution)
+
 
         x, y = self.tree.move.x, self.tree.move.y
         board.set_tile_colour(x, y, self.colour)
 
-        if self._agent_in_training:
-            self._record_experience(board, visit_count_normalised_distribution)
 
         return self.tree.move
     
