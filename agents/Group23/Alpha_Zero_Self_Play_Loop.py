@@ -11,6 +11,7 @@ class alpha_zero_self_play_loop:
     _Teacher_Network = None
     _max_games_per_simulation = 10
     _simulation_iterations = 100
+    _MCTS_turn_length_s = 5
     _game_log_location = "alpha_zero_self_play.log"
 
     def __init__(self):
@@ -21,11 +22,11 @@ class alpha_zero_self_play_loop:
         g = Game(
             player1=Player(
                 name="student player",
-                agent=AlphaZeroAgent(Colour.RED, custom_trained_network = self._Student_Network),
+                agent=AlphaZeroAgent(Colour.RED ,turn_length_s=self._MCTS_turn_length_s , custom_trained_network = self._Student_Network),
             ),
             player2=Player(
                 name="teacher player",
-                agent=AlphaZeroAgent(Colour.BLUE, custom_trained_network = self._Teacher_Network),
+                agent=AlphaZeroAgent(Colour.BLUE, turn_length_s=self._MCTS_turn_length_s, custom_trained_network = self._Teacher_Network),
             ),
             board_size=self._board_size,
             logDest=self._game_log_location,
@@ -59,12 +60,15 @@ class alpha_zero_self_play_loop:
                 if winner_colour == Colour.RED:
                     win_count += 1
 
+                print("Committing experience to networks")
                 self._Student_Network._commit_experience_from_buffer(winner_colour=Colour.RED)
                 self._Teacher_Network._commit_experience_from_buffer(winner_colour=Colour.BLUE)
 
             # check majority win rate and swap networks if necessary after 70% win rate
             if win_count/self._max_games_per_simulation > 0.7:
                 self._swap_student_teacher_networks()
+            else:
+                print("Majority win rate not reached, continuing training student without swapping networks")
 
             # train student network
             self._Student_Network._train()

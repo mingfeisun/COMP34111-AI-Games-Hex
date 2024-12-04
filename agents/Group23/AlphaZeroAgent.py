@@ -5,7 +5,6 @@ from src.AgentBase import AgentBase
 from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
-from src.Tile import Tile
 
 from agents.Group23.Alpha_Zero_NN import Alpha_Zero_NN
 from agents.Group23.alpha_zero_mcts import MCTS

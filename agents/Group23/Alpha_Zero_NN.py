@@ -1,7 +1,9 @@
 import os
 import numpy as np
-from tensorflow.keras.layers import Dense, Flatten, Conv2D, BatchNormalization, GlobalAveragePooling2D
+from tensorflow.keras.layers import Dense, Flatten, Conv2D, BatchNormalization, GlobalAveragePooling2D, Dropout
 from tensorflow.keras import Input, Model
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
 import tensorflow as tf
 import pandas as pd
 from src.Colour import Colour
@@ -38,9 +40,10 @@ class Alpha_Zero_NN:
         Returns:
             tf.Tensor: The policy head of the model
         """
-        x = Conv2D(32, kernel_size=3, activation='relu', padding='same')(input_layer)
+        x = Conv2D(32, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(1e-4))(input_layer)
+        x = Dropout(0.3)(x)
         x = Flatten()(x)
-        policy_output = Dense(self._board_size * self._board_size, activation='softmax', name='policy_head')(x)
+        policy_output = Dense(self._board_size * self._board_size, activation='softmax', name='policy_head', kernel_regularizer=l2(1e-4))(x)
         return policy_output
     
     def _create_value_head(self, input_layer:tf.Tensor) -> tf.Tensor:
@@ -52,11 +55,11 @@ class Alpha_Zero_NN:
         Returns:
             tf.Tensor: The value head of the model
         """
-
-        x = Conv2D(1, kernel_size=1, activation='relu', padding='same')(input_layer)
+        x = Conv2D(1, kernel_size=1, activation='relu', padding='same', kernel_regularizer=l2(1e-4))(input_layer)
         x = BatchNormalization()(x)
         x = GlobalAveragePooling2D()(x)
-        value_output = Dense(1, activation='tanh', name='value_head')(x)
+        x = Dropout(0.3)(x)  # Add dropout for regularization
+        value_output = Dense(1, activation='tanh', name='value_head', kernel_regularizer=l2(1e-4))(x)
         return value_output
 
     def _create_model(self):
@@ -84,7 +87,7 @@ class Alpha_Zero_NN:
             metrics={
                 'value_head': 'mean_absolute_error',
                 'policy_head': 'accuracy',
-            }
+            },
         )
         
         model.summary()
@@ -119,7 +122,6 @@ class Alpha_Zero_NN:
         _game_experience = self.load_experience_from_file("experience.txt")
 
         for board_state, mcts_prob, player_colour in self._experience_data_buffer:
-
             if player_colour == winner_colour:
                 new_row = [board_state, mcts_prob, 1]
                 _game_experience = pd.concat([_game_experience, pd.DataFrame([new_row], columns=_game_experience.columns)])
@@ -175,6 +177,12 @@ class Alpha_Zero_NN:
         if len(train_board_states) == 0:
             print("No training data available")
             return
+        
+        callbacks = [
+            EarlyStopping(monitor='val_loss', patience=4, restore_best_weights=True),
+            ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5),
+            ModelCheckpoint('best_model.keras', monitor='val_loss', save_best_only=True)
+        ]
 
         self._model.fit(
             x=train_board_states,
@@ -183,14 +191,15 @@ class Alpha_Zero_NN:
                 'policy_head': train_mcts_probs
             },
             batch_size=64,
-            epochs=10,
+            epochs=15,
             validation_data=(
                 val_board_states,
                 {
                     'value_head': val_z_values,
                     'policy_head': val_mcts_probs
                 }
-            )
+            ),
+            callbacks=callbacks
         )
         
 
@@ -229,8 +238,6 @@ class Alpha_Zero_NN:
         if self._model is None:
             return 0.5
         
-        # board_state = tf.convert_to_tensor(board_state, dtype=tf.float32)
-        # board_state = tf.expand_dims(board_state, axis=0)
         board_state = np.array(board_state)
         board_state_reshaped = board_state.reshape(1,  board_state.shape[0], board_state.shape[1], 1)
         value, _ = self._model.predict(board_state_reshaped, verbose = 0)

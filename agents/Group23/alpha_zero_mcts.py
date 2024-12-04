@@ -19,6 +19,7 @@ class MCTS:
         self.board = board  # The game board
         self.colour = colour  # Agent's colour
         self.turn_length = turn_length_s  # Length of a MCTS search in seconds
+        self.explore = 0.4 # Exploration parameter
 
         self._trained_network = custom_trained_network
         if self._trained_network is None:
@@ -196,7 +197,10 @@ class MCTS:
         # savebridge_moves = self.savebridge(board, colour, legal_moves)
         # if len(savebridge_moves) > 0:
         #     return random.choice(savebridge_moves)
-        
+
+        if random.random() < self.explore:
+            return random.choice(legal_moves)
+
         return self._trained_model_policy_best_move(board, legal_moves)
     
     def savebridge(self, board: Board, colour: Colour, legal_moves: list[Move]) -> Move:
