@@ -94,8 +94,7 @@ class MCTS:
         Generates a subset of all legal moves for the current board state, based on the heuristic given:
         https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=4406406
         """
-        moves = node.one_to_connect_moves | node.one_possible_connect_moves
-        moves = [Move(x, y) for x, y in moves]
+        moves = node.moves
 
         if len(moves) == 0:
             moves = self.get_all_moves(node.board)

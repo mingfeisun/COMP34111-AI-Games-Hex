@@ -3,8 +3,11 @@ from copy import deepcopy
 
 from agents.Group23.chain import Chain
 from agents.Group23.utilities import Utilities
+from agents.Group23.heuristic_move import HeuristicMove
+
 from src.Board import Board
 from src.Colour import Colour
+from src.Move import Move
 from src.Tile import Tile
 
 class TreeNode:
@@ -21,8 +24,9 @@ class TreeNode:
         self.wins = 0  # Number of wins from this node
 
         self.chains = TreeNode.find_connected_chains(self.board, self.player)
-        self.one_to_connect_moves = TreeNode.find_one_to_connect_moves(self.board, self.player, self.chains)
-        self.one_possible_connect_moves = TreeNode.find_one_possible_connect_moves(self.board, self.player, self.chains)
+        one_to_connect_moves = TreeNode.find_one_to_connect_moves(self.board, self.player, self.chains)
+        one_possible_connect_moves = TreeNode.find_one_possible_connect_moves(self.board, self.player, self.chains)
+        self._moves = one_to_connect_moves | one_possible_connect_moves
 
     def is_fully_expanded(self, legal_moves):
         """Checks if all possible moves have been expanded."""
@@ -52,6 +56,24 @@ class TreeNode:
             if child.move == move:
                 return child
         return None
+    
+    @property
+    def moves(self) -> list[HeuristicMove]:
+        ordered_moves = {
+            1: set(),
+            2: set(),
+            3: set(),
+            4: set(),
+            5: set()
+        }
+        for move in self._moves:
+            ordered_moves[move.priority].add(move)
+
+        # Only return moves of the highest priority
+        for moves in ordered_moves.values():
+            if len(moves) > 0:
+                return [Move(m.x, m.y) for m in moves]
+        return set()
     
 
 ######################################################################################
@@ -92,7 +114,7 @@ class TreeNode:
         return chains
     
     @staticmethod
-    def find_one_to_connect_moves(board: Board, colour: Colour, chains: set[Chain]) -> set[tuple[int, int]]:
+    def find_one_to_connect_moves(board: Board, colour: Colour, chains: set[Chain]) -> set[HeuristicMove]:
         """
         Finds all moves that connect a chain to the edge of the board or to another chain.
 
@@ -102,31 +124,109 @@ class TreeNode:
         for chain in chains:
             influence_region = chain.get_influence_region(board)
             for pos in influence_region:
+                # Identify game-ending moves (Priority 1)
+                if colour == Colour.RED:
+                    # Connect edge-connected chain to opposite edge
+                    if chain.chain_type == 'Top' and pos[0] == board.size - 1:
+                        move = HeuristicMove(pos[0], pos[1], 1)
+                        moves.add(move)
+                        break
+                    elif chain.chain_type == 'Bottom' and pos[0] == 0:
+                        move = HeuristicMove(pos[0], pos[1], 1)
+                        moves.add(move)
+                        break
+
+                    # Connect edge-connected chain to opposite edge-connected chain
+                    for other_chain in chains:
+                        if chain == other_chain:
+                            continue
+
+                        if (chain.chain_type == 'Top' and
+                            other_chain.chain_type == 'Bottom' and
+                            pos in other_chain.get_influence_region(board)):
+                            move = HeuristicMove(pos[0], pos[1], 1)
+                            moves.add(move)
+                            break
+
+                        if (chain.chain_type == 'Bottom' and
+                            other_chain.chain_type == 'Top' and
+                            pos in other_chain.get_influence_region(board)):
+                            move = HeuristicMove(pos[0], pos[1], 1)
+                            moves.add(move)
+                            break
+
+                elif colour == Colour.BLUE:
+                    # Connect edge-connected chain to opposite edge
+                    if chain.chain_type == 'Left' and pos[1] == board.size - 1:
+                        move = HeuristicMove(pos[0], pos[1], 1)
+                        moves.add(move)
+                        break
+                    elif chain.chain_type == 'Right' and pos[1] == 0:
+                        move = HeuristicMove(pos[0], pos[1], 1)
+                        moves.add(move)
+                        break
+
+                    # Connect edge-connected chain to opposite edge-connected chain
+                    for other_chain in chains:
+                        if chain == other_chain:
+                            continue
+
+                        if (chain.chain_type == 'Left' and
+                            other_chain.chain_type == 'Right' and
+                            pos in other_chain.get_influence_region(board)):
+                            move = HeuristicMove(pos[0], pos[1], 1)
+                            moves.add(move)
+                            break
+                        if (chain.chain_type == 'Right' and
+                            other_chain.chain_type == 'Left' and
+                            pos in other_chain.get_influence_region(board)):
+                            move = HeuristicMove(pos[0], pos[1], 1)
+                            moves.add(move)
+                            break
+                    
+
+                # Identify priority 2 moves
+                if colour == Colour.RED:
+                    if 'Top' not in chain.chain_type and pos[0] == 0:
+                        move = HeuristicMove(pos[0], pos[1], 2)
+                        moves.add(move)
+                    if 'Bottom' not in chain.chain_type and pos[0] == board.size - 1:
+                        move = HeuristicMove(pos[0], pos[1], 2)
+                        moves.add(move)
+                elif colour == Colour.BLUE:
+                    if 'Left' not in chain.chain_type and pos[1] == 0:
+                        move = HeuristicMove(pos[0], pos[1], 2)
+                        moves.add(move)
+                    if 'Right' not in chain.chain_type and pos[1] == board.size - 1:
+                        move = HeuristicMove(pos[0], pos[1], 2)
+                        moves.add(move)
+
                 # Check if this move creates a new connection (e.g., joins chains or completes a path)
                 connected_chains = [
                     other_chain for other_chain in chains 
                     if other_chain != chain 
                     and pos in other_chain.get_influence_region(board)
                 ]
-                if len(connected_chains) > 0:
-                    moves.add(pos)
                     
-                # Check if this move connects the chain to a new edge
-                if colour == Colour.RED:
-                    if 'Top' not in chain.chain_type and pos[0] == 0:
-                        moves.add(pos)
-                    if 'Bottom' not in chain.chain_type and pos[0] == board.size - 1:
-                        moves.add(pos)
-                elif colour == Colour.BLUE:
-                    if 'Left' not in chain.chain_type and pos[1] == 0:
-                        moves.add(pos)
-                    if 'Right' not in chain.chain_type and pos[1] == board.size - 1:
-                        moves.add(pos)
-        
+                # Identify priority 3 moves
+                for other_chain in connected_chains:
+                    if colour == Colour.RED:
+                        if (chain.chain_type != 'Top' and chain.chain_type != 'Bottom' and 
+                            (other_chain.chain_type == 'Bottom' or other_chain.chain_type == 'Top')):
+                            move = HeuristicMove(pos[0], pos[1], 3)
+                            moves.add(move)
+                            break # Only add the move once
+                    elif colour == Colour.BLUE:
+                        if (chain.chain_type != 'Left' and chain.chain_type != 'Right' and 
+                            (other_chain.chain_type == 'Right' or other_chain.chain_type == 'Left')):
+                            move = HeuristicMove(pos[0], pos[1], 3)
+                            moves.add(move)
+                            break # Only add the move once
+                        
         return moves
 
     @staticmethod
-    def find_one_possible_connect_moves(board: Board, colour: Colour, chains: set[Chain]) -> set[tuple[int, int]]:
+    def find_one_possible_connect_moves(board: Board, colour: Colour, chains: set[Chain]) -> set[HeuristicMove]:
         moves = set()
 
         for chain in chains:
@@ -134,25 +234,52 @@ class TreeNode:
             for pos in influence_region:
                 neighbour_tiles = Utilities.get_neighbours(board, board.tiles[pos[0]][pos[1]])
                 neighbour_positions = [(tile.x, tile.y) for tile in neighbour_tiles] # tiles are unhashable
+
+                # Check for priority 4 moves (one-possible-connect to edge)
+                if colour == Colour.RED:
+                    # potential future connection to top
+                    if 'Top' not in chain.chain_type and 0 in [pos[0] for pos in neighbour_positions]:
+                        move = HeuristicMove(pos[0], pos[1], 4)
+                        moves.add(move)
+                        break # Only add the move once
+                    # potential future connection to bottom
+                    if 'Bottom' not in chain.chain_type and board.size - 1 in [pos[0] for pos in neighbour_positions]:
+                        move = HeuristicMove(pos[0], pos[1], 4)
+                        moves.add(move)
+                        break # Only add the move once
+                elif colour == Colour.BLUE:
+                    # potential future connection to left
+                    if 'Left' not in chain.chain_type and 0 in [pos[1] for pos in neighbour_positions]:
+                        move = HeuristicMove(pos[0], pos[1], 4)
+                        moves.add(move)
+                        break # Only add the move once
+                    # potential future connection to right
+                    if 'Right' not in chain.chain_type and board.size - 1 in [pos[1] for pos in neighbour_positions]:
+                        move = HeuristicMove(pos[0], pos[1], 4)
+                        moves.add(move)
+                        break # Only add the move once
+
+                # Check for priority 5 moves (one-possible-connect to another chain which is connected to an edge)
+
                 possible_connected_chains = [
                     other_chain for other_chain in chains 
                     if other_chain != chain 
                     and len(other_chain.get_influence_region(board).intersection(neighbour_positions)) > 0
                 ]
-                if len(possible_connected_chains) > 0:
-                    moves.add(pos)
 
-                # Check if this move connects the chain to a new edge
-                if colour == Colour.RED:
-                    if 'Top' not in chain.chain_type and pos[0] == 0:
-                        moves.add(pos)
-                    if 'Bottom' not in chain.chain_type and pos[0] == board.size - 1:
-                        moves.add(pos)
-                elif colour == Colour.BLUE:
-                    if 'Left' not in chain.chain_type and pos[1] == 0:
-                        moves.add(pos)
-                    if 'Right' not in chain.chain_type and pos[1] == board.size - 1:
-                        moves.add(pos)
+                for other_chain in possible_connected_chains:
+                    if colour == Colour.RED:
+                        if ((chain.chain_type != 'Top' and other_chain.chain_type == 'Top') or 
+                            (chain.chain_type != 'Bottom' and other_chain.chain_type == 'Bottom')):
+                            move = HeuristicMove(pos[0], pos[1], 5)
+                            moves.add(move)
+                            break
+                    elif colour == Colour.BLUE:
+                        if ((chain.chain_type != 'Left' and other_chain.chain_type == 'Left') or 
+                            (chain.chain_type != 'Right' and other_chain.chain_type == 'Right')):
+                            move = HeuristicMove(pos[0], pos[1], 5)
+                            moves.add(move)
+                            break
         
         return moves
     
