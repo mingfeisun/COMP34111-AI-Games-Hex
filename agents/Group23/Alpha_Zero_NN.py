@@ -191,7 +191,7 @@ class Alpha_Zero_NN:
                 'policy_head': train_mcts_probs
             },
             batch_size=64,
-            epochs=15,
+            epochs=100,
             validation_data=(
                 val_board_states,
                 {
