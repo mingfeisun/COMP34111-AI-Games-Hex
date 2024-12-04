@@ -127,7 +127,7 @@ class AlphaZeroAgent(AgentBase):
             logging.info("Initialising game tree...")
             self.tree = TreeNode(player=self.colour)
 
-        mcts = MCTS(board, self.colour, turn_length_s=self.turn_length)
+        mcts = MCTS(board, self.colour, turn_length_s=self.turn_length, custom_trained_network=self._trained_policy_value_network)
         self.tree, visit_count_normalised_distribution = mcts.run(self.tree, )
 
         if self._agent_in_training:

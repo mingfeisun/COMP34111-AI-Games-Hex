@@ -203,17 +203,19 @@ class Alpha_Zero_NN:
         Returns:
             list[list[float]]: The policy for the given board state
         """
-        if self._policy_head is None or self._value_head is None:
+        if self._model is None:
             random_policy = []
-            for i in range(self._board_size):
+            for _ in range(self._board_size):
                 random_policy.append([1/self._board_size]*self._board_size)
             return random_policy
         
-        board_state = tf.convert_to_tensor(board_state, dtype=tf.float32)
-        board_state = tf.expand_dims(board_state, axis=0)
-        policy, _ = self._model.predict(board_state)
+        board_state = np.array(board_state)
+        board_state_reshaped = board_state.reshape(1,  board_state.shape[0], board_state.shape[1], 1)
+        _, policy = self._model.predict(board_state_reshaped, verbose = 0)
 
-        return policy[0]
+        policy_reshaped = policy[0].reshape(11, 11)
+
+        return policy_reshaped
     
     def get_predicted_value(self, board_state:list[list[int]]) -> float:
         """Get the predicted value for the given board state
@@ -224,14 +226,16 @@ class Alpha_Zero_NN:
         Returns:
             float: The predicted value for the given board state
         """
-        if self._policy_head is None or self._value_head is None:
+        if self._model is None:
             return 0.5
         
-        board_state = tf.convert_to_tensor(board_state, dtype=tf.float32)
-        board_state = tf.expand_dims(board_state, axis=0)
-        _, value = self._model.predict(board_state)
+        # board_state = tf.convert_to_tensor(board_state, dtype=tf.float32)
+        # board_state = tf.expand_dims(board_state, axis=0)
+        board_state = np.array(board_state)
+        board_state_reshaped = board_state.reshape(1,  board_state.shape[0], board_state.shape[1], 1)
+        value, _ = self._model.predict(board_state_reshaped, verbose = 0)
 
-        return value[0][0]
+        return value[0]
         
     def save_model(self, path:str):
         """Saves the model to the given path
@@ -248,7 +252,3 @@ class Alpha_Zero_NN:
             path (str): The path to load the model
         """
         self._model = tf.keras.models.load_model(path)
-
-
-if __name__ == "__main__":     
-    _ = Alpha_Zero_NN(11) # test model compiles

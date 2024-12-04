@@ -9,14 +9,22 @@ from src.Move import Move
 
 from agents.Group23.utilities import Utilities
 from agents.Group23.treenode import TreeNode
+from agents.Group23.Alpha_Zero_NN import Alpha_Zero_NN
 
 class MCTS:
     """Implements the Monte Carlo Tree Search algorithm."""
+    _trained_network = None
 
-    def __init__(self, board: Board, colour: Colour, turn_length_s: int = 5):
+    def __init__(self, board: Board, colour: Colour, turn_length_s: int = 5, custom_trained_network:Alpha_Zero_NN=None):
         self.board = board  # The game board
         self.colour = colour  # Agent's colour
         self.turn_length = turn_length_s  # Length of a MCTS search in seconds
+
+        self._trained_network = custom_trained_network
+        if self._trained_network is None:
+            raise ValueError("A trained network must be provided for AlphaZero.")
+
+        
 
     def _get_visit_count_distribution(self, node: TreeNode) -> list[list[int]]:
         """Returns the visit count distribution for the children of the given node.
@@ -68,7 +76,7 @@ class MCTS:
         return best_child, visit_count_normalised_distribution
 
     def _select(self, node: TreeNode):
-        """Selects a node to expand using the UCT formula."""
+        """Selects a node to expand using the UCT formula considering policy head"""
         legal_moves = self._get_legal_moves(self.board)
         while node.is_fully_expanded(legal_moves):
             node = node.best_child()
@@ -84,12 +92,41 @@ class MCTS:
             return node.add_child(new_move)
 
         return node
+    
+    def get_board_vector(self, board: Board) -> list[list[int]]:
+        """generate input vector for neural network
+        based on current and recent board states
+
+        Args:
+            board (Board): current board state
+
+        Returns:
+            list[int]: input vector for neural network
+        """
+        
+        # convert board state to input vector
+        board_vector = []
+        for i in range(len(board.tiles)):
+            new_line = []
+            for j in range(len(board.tiles)):
+                tile = board.tiles[i][j].colour
+                if tile == None:
+                    new_line.append(0)
+                elif tile == self.colour:
+                    new_line.append(1)
+                else:
+                    new_line.append(-1)
+            board_vector.append(new_line)
+
+        return board_vector
 
     def _simulate(self, node: TreeNode):
         """Simulates a random game from the current node and returns the result."""
         simulation_board = deepcopy(self.board)  # Create a copy of the board
         x, y = node.move.x, node.move.y
         simulation_board.set_tile_colour(x, y, self.colour)  # Play the move
+
+        simulation_board_vector = self.get_board_vector(simulation_board)
 
         # Play randomly until the game ends
         current_colour = self.colour.opposite()
@@ -103,7 +140,10 @@ class MCTS:
             simulation_board.set_tile_colour(x, y, current_colour)
             current_colour = current_colour.opposite()
 
-        return 1 if simulation_board.get_winner() == self.colour else 0
+        value = self._trained_network.get_predicted_value(simulation_board_vector)
+
+        # return 1 if simulation_board.get_winner() == self.colour else 0
+        return value
 
     def _backpropagate(self, node: TreeNode, result: int):
         """Backpropagates the simulation result through the tree."""
@@ -124,17 +164,40 @@ class MCTS:
             raise ValueError("No legal moves available")
         
         return [Move(tile.x, tile.y) for tile in available_tiles]
+    
+    def _trained_model_policy_best_move(self, board: Board, legal_moves: list[Move]) -> list[list[float]]:
+        """
+        Returns the policy predicted by the trained model for the given board state.
+        
+        Args:
+            board (Board): The current state of the board.
+        
+        Returns:
+            list[list[float]]: The policy predicted by the trained model.
+        """
+        board_vector = self.get_board_vector(board)
+        policy_matrix = self._trained_network.get_policy_value(board_vector)
+
+        # Filter the policy for legal moves
+        legal_policy = [[0 for _ in range(11)] for _ in range(11)]
+        for move in legal_moves:
+            legal_policy[move.x][move.y] = policy_matrix[move.x][move.y]
+
+        # select best move
+        best_move = max(legal_moves, key=lambda move: legal_policy[move.x][move.y])
+
+        return best_move
 
     def _default_policy(self, board: Board, colour: Colour, legal_moves: list[Move]) -> Move:
         """
         Implements a default policy to select a simulation move.
         Checks for basic savebridge template connections to play deterministically.
         """
-        savebridge_moves = self.savebridge(board, colour, legal_moves)
-        if len(savebridge_moves) > 0:
-            return random.choice(savebridge_moves)
-
-        return random.choice(legal_moves)
+        # savebridge_moves = self.savebridge(board, colour, legal_moves)
+        # if len(savebridge_moves) > 0:
+        #     return random.choice(savebridge_moves)
+        
+        return self._trained_model_policy_best_move(board, legal_moves)
     
     def savebridge(self, board: Board, colour: Colour, legal_moves: list[Move]) -> Move:
         """

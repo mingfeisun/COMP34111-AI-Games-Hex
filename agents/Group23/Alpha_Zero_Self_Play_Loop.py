@@ -9,7 +9,7 @@ class alpha_zero_self_play_loop:
     _board_size: int = 11
     _Student_Network = None
     _Teacher_Network = None
-    _max_games_per_simulation = 1
+    _max_games_per_simulation = 10
     _simulation_iterations = 100
     _game_log_location = "alpha_zero_self_play.log"
 
@@ -62,8 +62,8 @@ class alpha_zero_self_play_loop:
                 self._Student_Network._commit_experience_from_buffer(winner_colour=Colour.RED)
                 self._Teacher_Network._commit_experience_from_buffer(winner_colour=Colour.BLUE)
 
-            # check majority win rate and swap networks if necessary
-            if win_count > self._max_games_per_simulation / 2:
+            # check majority win rate and swap networks if necessary after 70% win rate
+            if win_count/self._max_games_per_simulation > 0.7:
                 self._swap_student_teacher_networks()
 
             # train student network
