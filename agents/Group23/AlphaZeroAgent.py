@@ -8,33 +8,7 @@ from src.Move import Move
 from src.Tile import Tile
 
 from agents.Group23.Alpha_Zero_NN import Alpha_Zero_NN
-from agents.Group23.mcts import MCTS
-
-class Utilities:
-    RELATIVE_NEIGHBOURS = [
-        (-1, -1), (-1, 0), # row above
-        (0, -1), (0, 1), # same row
-        (1, 0), (1, 1) # row below
-    ]
-
-    def get_neighbours(board: Board, x, y) -> list[Tile]:
-        """Returns a list of all neighbouring tiles."""
-        neighbours = []
-        for offset in Utilities.RELATIVE_NEIGHBOURS:
-            x_offset, y_offset = offset
-            x_n, y_n = x + x_offset, y + y_offset
-
-            if Utilities.is_within_bounds(board, x_n, y_n):
-                neighbours.append(board.tiles[x_n][y_n])
-        
-        return neighbours
-    
-    def is_within_bounds(board: Board, x, y) -> bool:
-        """Checks if the coordinates are within the board bounds."""
-        return 0 <= x < board.size and 0 <= y < board.size
-
-
-######################################################################################
+from agents.Group23.alpha_zero_mcts import MCTS
 
 class TreeNode:
     """Represents a node in the MCTS tree."""
@@ -59,6 +33,9 @@ class TreeNode:
 
     def best_child(self, explore=math.sqrt(2)):
         """Selects the best child using UCT."""
+        self.visits += 1
+        print(self.visits)
+
         return max(
             self.children,
             key=lambda child: self.__value__(child, explore)
@@ -91,15 +68,16 @@ class AlphaZeroAgent(AgentBase):
     _trained_policy_value_network = None # store a trained policy and value network
     _agent_in_training = False # flag to indicate if agent is in training mode
     tree = None
-    turn_length = 1
+    turn_length = 2
 
-    def __init__(self, colour: Colour, custom_trained_network: Alpha_Zero_NN = None, turn_length_s: int = 1):
+    def __init__(self, colour: Colour, custom_trained_network: Alpha_Zero_NN = None, turn_length_s: int = 2):
         super().__init__(colour)
         if custom_trained_network is not None:
             self._trained_policy_value_network = custom_trained_network
             self._agent_in_training = True
         self.turn_length = turn_length_s # max length of a turn in seconds
         self.tree = None # MCTS tree
+
 
     def get_board_vector(self, board: Board) -> list[list[int]]:
         """generate input vector for neural network
@@ -135,6 +113,7 @@ class AlphaZeroAgent(AgentBase):
             board_state (list[list[int]]): experienced board states
             mcts_probs (list[list[float]]): mcts probabilities for the given board state
         """
+        print(f"Recording experience ({self.colour})")
         board_state = self.get_board_vector(board_state)
         self._trained_policy_value_network._add_experience_to_buffer(board_state, mcts_probs, self.colour)
 
@@ -152,10 +131,13 @@ class AlphaZeroAgent(AgentBase):
             self.tree = TreeNode(player=self.colour)
 
         mcts = MCTS(board, self.colour, turn_length_s=self.turn_length)
-        self.tree = mcts.run(self.tree)
+        self.tree, visit_count_normalised_distribution = mcts.run(self.tree)
 
         x, y = self.tree.move.x, self.tree.move.y
         board.set_tile_colour(x, y, self.colour)
+
+        if self._agent_in_training:
+            self._record_experience(board, visit_count_normalised_distribution)
 
         return self.tree.move
     
