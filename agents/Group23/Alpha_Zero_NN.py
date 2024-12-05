@@ -27,7 +27,8 @@ class Alpha_Zero_NN:
         Args:
             path (str): The path to load the model
         """
-        if os.path.exists(path):  
+        # check if file exists
+        if os.path.exists(path):
             print("Loading pre-trained model from path: ", path)
             self._model = tf.keras.models.load_model(path)
         else:
@@ -42,7 +43,7 @@ class Alpha_Zero_NN:
         """
         print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
         self._board_size = board_size
-        self.load_model('best_model.keras')
+        self._load_model('best_model.keras')
 
     
     def _residual_block(self, x, filters, kernel_size=3):
@@ -265,11 +266,3 @@ class Alpha_Zero_NN:
             path (str): The path to save the model
         """
         self._model.save(path)
-
-    def load_model(self, path:str):
-        """Loads the model from the given path
-
-        Args:
-            path (str): The path to load the model
-        """
-        self._model = tf.keras.models.load_model(path)
