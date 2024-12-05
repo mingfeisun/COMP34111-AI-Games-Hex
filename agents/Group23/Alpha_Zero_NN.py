@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from tensorflow.keras.layers import Dense, Flatten, Conv2D, BatchNormalization, GlobalAveragePooling2D, Dropout
+from tensorflow.keras.layers import Dense, Flatten, Conv2D, BatchNormalization, GlobalAveragePooling2D, ReLU, Add
 from tensorflow.keras import Input, Model
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
@@ -13,10 +13,11 @@ class Alpha_Zero_NN:
     _board_size = 11 # default board size
     _model = None # current model
     _experience_data_buffer = []
+    dataset_path = 'game_experience.txt'
 
     def load_experience_from_file(self, path:str):
-        if os.path.exists("experience.txt"):
-            return pd.read_csv("experience.txt")
+        if os.path.exists(self.dataset_path):
+            return pd.read_csv(self.dataset_path)
         else:
             return pd.DataFrame(columns=['board_state', 'mcts_prob', 'z_value'])
 
@@ -31,55 +32,56 @@ class Alpha_Zero_NN:
 
         self._train()
 
-    def _create_policy_head(self, input_layer:tf.Tensor) -> tf.Tensor:
-        """Creates the policy head of the model
+    
+    def _residual_block(self, x, filters, kernel_size=3):
+        """Residual block with two convolutional layers and a skip connection"""
+        shortcut = x
+        x = Conv2D(filters, kernel_size=kernel_size, padding='same', kernel_regularizer=l2(1e-4))(x)
+        x = BatchNormalization()(x)
+        x = ReLU()(x)
+        x = Conv2D(filters, kernel_size=kernel_size, padding='same', kernel_regularizer=l2(1e-4))(x)
+        x = BatchNormalization()(x)
+        x = Add()([shortcut, x])  # Add skip connection
+        x = ReLU()(x)
+        return x
 
-        Args:
-            input_layer (tf.Tensor): The input layer of the model
-
-        Returns:
-            tf.Tensor: The policy head of the model
-        """
-        x = Conv2D(32, kernel_size=3, activation='relu', padding='same', kernel_regularizer=l2(1e-4))(input_layer)
-        x = Dropout(0.3)(x)
+    def _create_policy_head(self, input_layer: tf.Tensor) -> tf.Tensor:
+        x = Conv2D(2, kernel_size=1, activation='relu', padding='same', kernel_regularizer=l2(1e-4))(input_layer)
+        x = BatchNormalization()(x)
         x = Flatten()(x)
         policy_output = Dense(self._board_size * self._board_size, activation='softmax', name='policy_head', kernel_regularizer=l2(1e-4))(x)
         return policy_output
-    
-    def _create_value_head(self, input_layer:tf.Tensor) -> tf.Tensor:
-        """Creates the value head of the model
 
-        Args:
-            input_layer (tf.Tensor): The input layer of the model
-
-        Returns:
-            tf.Tensor: The value head of the model
-        """
+    def _create_value_head(self, input_layer: tf.Tensor) -> tf.Tensor:
         x = Conv2D(1, kernel_size=1, activation='relu', padding='same', kernel_regularizer=l2(1e-4))(input_layer)
         x = BatchNormalization()(x)
         x = GlobalAveragePooling2D()(x)
-        x = Dropout(0.3)(x)  # Add dropout for regularization
+        x = Dense(256, activation='relu', kernel_regularizer=l2(1e-4))(x)  # Fully connected layer for value refinement
         value_output = Dense(1, activation='tanh', name='value_head', kernel_regularizer=l2(1e-4))(x)
         return value_output
 
     def _create_model(self):
-        """Creates the model with the policy and value heads
-
-        Returns:
-            tf.keras.Model: The model with the policy and value heads
-        """
         input_layer = Input(shape=(self._board_size, self._board_size, 1))  # Input for the board state
 
+        # Initial convolutional layer
+        x = Conv2D(256, kernel_size=3, padding='same', kernel_regularizer=l2(1e-4))(input_layer)
+        x = BatchNormalization()(x)
+        x = ReLU()(x)
+
+        # Stack residual blocks
+        for _ in range(10):  # Increase depth for better feature extraction
+            x = self._residual_block(x, filters=256)
+
         # Policy and Value heads
-        policy_head = self._create_policy_head(input_layer)
-        value_head = self._create_value_head(input_layer)
+        policy_head = self._create_policy_head(x)
+        value_head = self._create_value_head(x)
 
         # Combine into a single model
         model = Model(inputs=input_layer, outputs=[value_head, policy_head])
 
         # Compile the model
         model.compile(
-            optimizer='adam',
+            optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
             loss={
                 'value_head': 'mean_squared_error',
                 'policy_head': 'categorical_crossentropy',
@@ -119,7 +121,7 @@ class Alpha_Zero_NN:
             winner_colour (float): game winner to update z values
         """
 
-        _game_experience = self.load_experience_from_file("experience.txt")
+        _game_experience = self.load_experience_from_file(self.dataset_path)
 
         for board_state, mcts_prob, player_colour in self._experience_data_buffer:
             if player_colour == winner_colour:
@@ -129,13 +131,13 @@ class Alpha_Zero_NN:
                 new_row = [board_state, mcts_prob, -1]
                 _game_experience = pd.concat([_game_experience, pd.DataFrame([new_row], columns=_game_experience.columns)])
 
-        self.save_experience_to_file("experience.txt", _game_experience)
+        self.save_experience_to_file(self.dataset_path, _game_experience)
 
         self._experience_data_buffer = [] # clear buffer
 
 
     def get_train_val_data(self, validation_split=0.2):
-        _game_experience = self.load_experience_from_file("experience.txt")
+        _game_experience = self.load_experience_from_file(self.dataset_path)
 
         if len(_game_experience) == 0:
             return [], [], [], [], [], []
@@ -190,7 +192,7 @@ class Alpha_Zero_NN:
                 'value_head': train_z_values,
                 'policy_head': train_mcts_probs
             },
-            batch_size=64,
+            batch_size=128,
             epochs=100,
             validation_data=(
                 val_board_states,
