@@ -70,9 +70,10 @@ class alpha_zero_self_play_loop:
                     win_count += 1
 
                 print("Committing experience to networks")
-                self._Student_Network._commit_experience_from_buffer(winner_colour=Colour.RED)
+                self._Student_Network._commit_experience_from_buffer(winner_colour=winner_colour)
                 sleep(2) # INCASE OF RACE CONDITION
-                self._Teacher_Network._commit_experience_from_buffer(winner_colour=Colour.BLUE)
+                self._Teacher_Network._commit_experience_from_buffer(winner_colour=winner_colour)
+                sleep(2) # INCASE OF RACE CONDITION
 
             # check majority win rate and swap networks if necessary after 70% win rate
             if win_count/self._max_games_per_simulation > 0.7:
