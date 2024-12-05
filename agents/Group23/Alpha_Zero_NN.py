@@ -20,6 +20,19 @@ class Alpha_Zero_NN:
             return pd.read_csv(self.dataset_path)
         else:
             return pd.DataFrame(columns=['board_state', 'mcts_prob', 'z_value'])
+        
+    def _load_model(self, path:str):
+        """Loads the model from the given path
+
+        Args:
+            path (str): The path to load the model
+        """
+        if os.path.exists(path):  
+            print("Loading pre-trained model from path: ", path)
+            self._model = tf.keras.models.load_model(path)
+        else:
+            print("Creating new model - Model not found at path: ", path)
+            self._model = self._create_model()
 
     def __init__(self, board_size:int):
         """Initializes the AlphaZero neural network model
@@ -27,10 +40,9 @@ class Alpha_Zero_NN:
         Args:
             board_size (int): The size of the board
         """
+        print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
         self._board_size = board_size
-        self._model = self._create_model()
-
-        self._train()
+        self.load_model('best_model.keras')
 
     
     def _residual_block(self, x, filters, kernel_size=3):

@@ -22,6 +22,9 @@ class AlphaZeroAgent(AgentBase):
         if custom_trained_network is not None:
             self._trained_policy_value_network = custom_trained_network
             self._agent_in_training = True
+        else:
+            # create a NN using the best model saved
+            self._trained_policy_value_network = Alpha_Zero_NN(board_size=self._board_size)
         self.turn_length = turn_length_s # max length of a turn in seconds
         self.tree = None # MCTS tree
 
