@@ -6,7 +6,7 @@ from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
 
-from agents.Group23.treenode import TreeNode
+from agents.Group23.alpha_zero_treenode import TreeNode
 
 class MCTS:
     """Implements the Monte Carlo Tree Search algorithm."""
@@ -14,6 +14,7 @@ class MCTS:
     def __init__(self, colour: Colour, max_simulation_length: float = 2.5, custom_trained_network=None):
         self.colour = colour  # Agent's colour
         self.max_simulation_length = max_simulation_length  # Length of a MCTS search in seconds
+        self._trained_network = custom_trained_network
 
     def _get_visit_count_distribution(self, node: TreeNode) -> list[list[int]]:
         """Returns the visit count distribution for the children of the given node.
@@ -32,6 +33,7 @@ class MCTS:
         for i in range(11):
             for j in range(11):
                 distribution_board[i][j] /= total_visits
+
         return distribution_board
     
     def _count_visits_DFS(self, node: TreeNode, distribution_board: list[list[int]]):
@@ -49,7 +51,7 @@ class MCTS:
 
     def run(self, board: Board):
         """Performs MCTS simulations from the root node."""
-        root = TreeNode(board=board, player=self.colour)
+        root = TreeNode(board=board, player=self.colour, trained_network=self._trained_network)
 
         iterations = 0
         start_time = time.time()
@@ -90,6 +92,33 @@ class MCTS:
             return node.add_child(new_move)
 
         return node
+    
+    def get_board_vector(self, board: Board) -> list[list[int]]:
+        """generate input vector for neural network
+        based on current and recent board states
+
+        Args:
+            board (Board): current board state
+
+        Returns:
+            list[int]: input vector for neural network
+        """
+        
+        # convert board state to input vector
+        board_vector = []
+        for i in range(len(board.tiles)):
+            new_line = []
+            for j in range(len(board.tiles)):
+                tile = board.tiles[i][j].colour
+                if tile == None:
+                    new_line.append(0)
+                elif tile == self.colour:
+                    new_line.append(1)
+                else:
+                    new_line.append(-1)
+            board_vector.append(new_line)
+
+        return board_vector
 
     def _simulate(self, node: TreeNode):
         """Simulates a random game from the current node and returns the result."""
@@ -97,8 +126,16 @@ class MCTS:
 
         # Play randomly until the game ends
         current_colour = self.colour.opposite()
+
+        MAX_DEPTH = 50
+        current_depth = 0
+
         while (not simulation_board.has_ended(colour=current_colour) and
-               not simulation_board.has_ended(colour=current_colour.opposite())):
+               not simulation_board.has_ended(colour=current_colour.opposite()) and
+               MAX_DEPTH < current_depth):
+            
+            current_depth += 1
+            
             moves = self.get_all_moves(simulation_board)
 
             move = self._default_policy(moves)
@@ -107,7 +144,16 @@ class MCTS:
             simulation_board.set_tile_colour(x, y, current_colour)
             current_colour = current_colour.opposite()
 
-        return 1 if simulation_board.get_winner() == self.colour else 0
+        simulation_board_vector = self.get_board_vector(simulation_board)
+
+        if simulation_board.has_ended(colour=self.colour):
+            value = 1
+        elif simulation_board.has_ended(colour=self.colour.opposite()):
+            value = 0
+        else:
+            # use predicted value from neural network
+            value = self._trained_network.get_predicted_value(simulation_board_vector)
+        return value
 
     def _backpropagate(self, node: TreeNode, result: int):
         """Backpropagates the simulation result through the tree."""
@@ -139,6 +185,7 @@ class MCTS:
         """
         Implements a default policy to select a simulation move.
         """
+
         if len(moves) == 0:
             raise ValueError("No legal moves available")
         return random.choice(moves)

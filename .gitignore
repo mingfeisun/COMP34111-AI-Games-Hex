@@ -1,3 +1,6 @@
+game_experience.txt
+best_model.keras
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
