@@ -11,9 +11,41 @@ from agents.Group23.treenode import TreeNode
 class MCTS:
     """Implements the Monte Carlo Tree Search algorithm."""
 
-    def __init__(self, colour: Colour, max_simulation_length: float = 2.5):
+    def __init__(self, colour: Colour, max_simulation_length: float = 2.5, custom_trained_network=None):
         self.colour = colour  # Agent's colour
         self.max_simulation_length = max_simulation_length  # Length of a MCTS search in seconds
+
+    def _get_visit_count_distribution(self, node: TreeNode) -> list[list[int]]:
+        """Returns the visit count distribution for the children of the given node.
+
+        Args:
+            node (TreeNode): current node
+
+        Returns:
+            list[list[int]]: visit count distribution
+        """
+        distribution_board = [[0 for _ in range(11)] for _ in range(11)]
+        self._count_visits_DFS(node, distribution_board)
+
+        # softmax normalization
+        total_visits = sum(sum(row) for row in distribution_board)
+        for i in range(11):
+            for j in range(11):
+                distribution_board[i][j] /= total_visits
+        return distribution_board
+    
+    def _count_visits_DFS(self, node: TreeNode, distribution_board: list[list[int]]):
+        """Counts the visits for the children of the given node.
+
+        Args:
+            node (TreeNode): current node
+            distribution_board (list[list[int]]): visit count distribution passed by reference
+        """
+        for child in node.children:
+            x, y = child.move.x, child.move.y
+            distribution_board[x][y] += child.visits
+            self._count_visits_DFS(child, distribution_board)
+
 
     def run(self, board: Board):
         """Performs MCTS simulations from the root node."""
@@ -36,8 +68,10 @@ class MCTS:
         print(f'Moves:')
         for child in root.children:
             print(f'  - Move: ({child.move.x, child.move.y}), Wins: {child.wins}, Visits: {child.visits}')
+
+        pd_distribution = self._get_visit_count_distribution(root)
         
-        return best_child.move
+        return best_child.move, pd_distribution
 
     def _select(self, node: TreeNode):
         """Selects a node to expand using the UCT formula."""
