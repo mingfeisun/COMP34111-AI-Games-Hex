@@ -37,6 +37,7 @@ class Alpha_Zero_NN:
         else:
             print("Creating new model - Model not found at path: ", path)
             self._model = self._create_model()
+            self._train()
 
     def __init__(self, board_size:int):
         """Initializes the AlphaZero neural network model
@@ -46,7 +47,6 @@ class Alpha_Zero_NN:
         """
         print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
         self._board_size = board_size
-        self._model = self._create_model()
         self._load_model('best_model.keras')
 
     
