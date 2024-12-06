@@ -9,6 +9,9 @@ import pandas as pd
 from src.Colour import Colour
 import ast
 
+# Resource reference for AlphaZero NN architecture
+# https://medium.com/applied-data-science/alphago-zero-explained-in-one-diagram-365f5abf67e0
+
 class Alpha_Zero_NN:
     _board_size = 11 # default board size
     _model = None # current model
@@ -43,6 +46,7 @@ class Alpha_Zero_NN:
         """
         print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
         self._board_size = board_size
+        self._model = self._create_model()
         self._load_model('best_model.keras')
 
     
@@ -68,7 +72,7 @@ class Alpha_Zero_NN:
     def _create_value_head(self, input_layer: tf.Tensor) -> tf.Tensor:
         x = Conv2D(1, kernel_size=1, activation='relu', padding='same', kernel_regularizer=l2(1e-4))(input_layer)
         x = BatchNormalization()(x)
-        x = GlobalAveragePooling2D()(x)
+        x = ReLU()(x)
         x = Dense(256, activation='relu', kernel_regularizer=l2(1e-4))(x)  # Fully connected layer for value refinement
         value_output = Dense(1, activation='tanh', name='value_head', kernel_regularizer=l2(1e-4))(x)
         return value_output
@@ -82,7 +86,7 @@ class Alpha_Zero_NN:
         x = ReLU()(x)
 
         # Stack residual blocks
-        for _ in range(10):  # Increase depth for better feature extraction
+        for _ in range(40):  # Increase depth for better feature extraction
             x = self._residual_block(x, filters=256)
 
         # Policy and Value heads
