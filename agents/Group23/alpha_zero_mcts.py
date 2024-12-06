@@ -6,6 +6,8 @@ from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
 
+import numpy as np
+
 from agents.Group23.alpha_zero_treenode import TreeNode
 
 class MCTS:
@@ -64,7 +66,12 @@ class MCTS:
         print(f'Ran {iterations} simulations in {time.time() - start_time:.2f}s')
 
         # Choose the most visited child as the best move
-        best_child = max(root.children, key=lambda child: child.wins / child.visits)
+        best_child = max(
+            root.children,
+            key=lambda child: (
+                (np.sum(child.wins) / np.sum(child.visits)) if np.sum(child.visits) > 0 else float('-inf')
+            )
+        )
 
         print(f'Selected move with {best_child.visits} visits and {best_child.wins} wins from {len(root.children)} possible moves')
         print(f'Moves:')
