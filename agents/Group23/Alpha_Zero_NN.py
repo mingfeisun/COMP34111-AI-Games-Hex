@@ -73,6 +73,7 @@ class Alpha_Zero_NN:
         x = Conv2D(1, kernel_size=1, activation='relu', padding='same', kernel_regularizer=l2(1e-4))(input_layer)
         x = BatchNormalization()(x)
         x = ReLU()(x)
+        x = Flatten()(x)
         x = Dense(256, activation='relu', kernel_regularizer=l2(1e-4))(x)  # Fully connected layer for value refinement
         value_output = Dense(1, activation='tanh', name='value_head', kernel_regularizer=l2(1e-4))(x)
         return value_output
@@ -86,12 +87,12 @@ class Alpha_Zero_NN:
         x = ReLU()(x)
 
         # Stack residual blocks
-        for _ in range(40):  # Increase depth for better feature extraction
+        for _ in range(20):  # Increase depth for better feature extraction
             x = self._residual_block(x, filters=256)
 
         # Policy and Value heads
-        policy_head = self._create_policy_head(x)
         value_head = self._create_value_head(x)
+        policy_head = self._create_policy_head(x)
 
         # Combine into a single model
         model = Model(inputs=input_layer, outputs=[value_head, policy_head])
@@ -209,7 +210,7 @@ class Alpha_Zero_NN:
                 'value_head': train_z_values,
                 'policy_head': train_mcts_probs
             },
-            batch_size=128,
+            batch_size=32,
             epochs=100,
             validation_data=(
                 val_board_states,
