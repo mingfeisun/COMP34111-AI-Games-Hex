@@ -109,13 +109,26 @@ class MCTS:
 
         iterations = 0
         start_time = time.time()
+        cum_select_time = 0
+        cum_simulate_time = 0
+        cum_backpropagate_time = 0
         while time.time() - start_time < self.max_simulation_length:
             iterations += 1
+            time1 = time.time()
             node = self._select(root)
+            time2 = time.time()
+            cum_select_time += time2 - time1
             result = self._simulate(node)
+            time3 = time.time()
+            cum_simulate_time += time3 - time2
             self._backpropagate(node, result)
+            time4 = time.time()
+            cum_backpropagate_time += time4 - time3
 
         print(f'Ran {iterations} simulations in {time.time() - start_time:.2f}s')
+        print(f' - Average time to execute SELECT: {cum_select_time / iterations:.2f}s')
+        print(f' - Average time to execute SIMULATE: {cum_simulate_time / iterations:.2f}s')
+        print(f' - Average time to execute BACKPROPAGATE: {cum_backpropagate_time / iterations:.2f}s')
 
         # Choose the most visited child as the best move
         best_child = max(

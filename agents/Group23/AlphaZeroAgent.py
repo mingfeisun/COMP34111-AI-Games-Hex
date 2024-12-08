@@ -67,7 +67,9 @@ class AlphaZeroAgent(AgentBase):
         self._trained_policy_value_network._add_experience_to_buffer(board_vector_state, mcts_probs, self.colour)
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
-        mcts = MCTS(self.colour, max_simulation_length=self.turn_length, custom_trained_network=self._trained_policy_value_network, in_training=self._agent_in_training)
+        allowed_time = self.allowed_time(turn_number=turn)
+
+        mcts = MCTS(self.colour, max_simulation_length=allowed_time, custom_trained_network=self._trained_policy_value_network, in_training=self._agent_in_training)
         best_move, visit_count_normalised_distribution = mcts.run(board) # normalised distribution is None if not in training mode
 
         if self._agent_in_training:
@@ -75,3 +77,30 @@ class AlphaZeroAgent(AgentBase):
             self._record_experience(board, visit_count_normalised_distribution)
 
         return best_move
+    
+
+    def allowed_time(self, turn_number, total_turns=121, total_time=300):
+        """
+        Calculate the allowed time for a turn in a game, giving more time to earlier turns
+        and less to later ones.
+
+        Args:
+            turn_number (int): The current turn number (1-indexed).
+            total_turns (int): Total number of turns in the game (default: 121).
+            total_time (float): Total allowed time in seconds (default: 300 seconds).
+
+        Returns:
+            float: Allowed time in seconds for the given turn.
+        """
+        # Parameter controlling the decay rate (higher values give more time to early turns).
+        decay_rate = 0.97
+
+        # Calculate the weight for each turn based on the decay rate.
+        weights = [decay_rate ** i for i in range(total_turns)]
+        total_weight = sum(weights)
+
+        # Calculate the allowed time for the current turn.
+        turn_weight = weights[turn_number - 1]  # Turn number is 1-indexed.
+        turn_time = (turn_weight / total_weight) * total_time
+
+        return turn_time
