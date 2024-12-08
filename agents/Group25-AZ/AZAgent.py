@@ -26,7 +26,7 @@ class AZAgent(AgentBase):
     _board_size: int = 11
 
     def __init__(self, colour: Colour):
-        self.model = load_model(r"/home/hex/agents/Group25-AZ/azsrc/model/11_2w4_2000.pt")
+        self.model = load_model(r"/home/hex/agents/Group25-AZ/azsrc/data/azagnet-0391.pt")
         self.hexhexboard = hexboard.Board(11, False)
         self.game = MultiHexGame(
             boards=(self.hexhexboard,),
