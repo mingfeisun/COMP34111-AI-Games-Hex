@@ -34,34 +34,19 @@ class MCTS:
         Returns:
             list[list[float]]: average value distribution
         """
-        visit_distribution = np.array(self._get_visit_count_distribution(node))
-        win_distribution = np.array(self._get_win_count_distribution(node))
+        visit_distribution = self._get_visit_count_distribution(node)
+        win_distribution = self._get_win_count_distribution(node)
 
-        if visit_distribution.shape != win_distribution.shape:
-            raise ValueError('Visit and win distributions have different shapes')
-        
-        average_value_distribution = win_distribution / visit_distribution
+     
+        average_value_distribution = [[0 for _ in range(11)] for _ in range(11)]
 
-        return average_value_distribution
-
-    def _get_average_value_distribution(self, node: TreeNode) -> list[list[float]]:
-        """Returns the average value distribution for the children of the given node.
-
-        Args:
-            node (TreeNode): current node
-
-        Returns:
-            list[list[float]]: average value distribution
-        """
-        visit_distribution = np.array(self._get_visit_count_distribution(node))
-        win_distribution = np.array(self._get_win_count_distribution(node))
-
-        if visit_distribution.shape != win_distribution.shape:
-            raise ValueError('Visit and win distributions have different shapes')
-        
-        average_value_distribution = win_distribution / visit_distribution
+        for i in range(11):
+            for j in range(11):
+                if visit_distribution[i][j] != 0:
+                    average_value_distribution[i][j] = win_distribution[i][j] / visit_distribution[i][j]
 
         return average_value_distribution
+
 
     def _get_visit_count_distribution(self, node: TreeNode) -> list[list[int]]:
         """Returns the visit count distribution for the children of the given node.
@@ -115,7 +100,7 @@ class MCTS:
         for child in node.children:
             x, y = child.move.x, child.move.y
             distribution_board[x][y] += child.wins
-            self._count_visits_DFS(child, distribution_board)
+            self._count_wins_DFS(child, distribution_board)
 
 
     def run(self, board: Board):
