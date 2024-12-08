@@ -15,9 +15,8 @@ class AlphaZeroAgent(AgentBase):
     _trained_policy_value_network = None # store a trained policy and value network
     _agent_in_training = False # flag to indicate if agent is in training mode
     tree = None
-    turn_length = 1
 
-    def __init__(self, colour: Colour, custom_trained_network: Alpha_Zero_NN = None, turn_length_s: int = 1):
+    def __init__(self, colour: Colour, custom_trained_network: Alpha_Zero_NN = None, turn_length_s: int = 2.5):
         super().__init__(colour)
         if custom_trained_network is not None:
             self._trained_policy_value_network = custom_trained_network
@@ -68,8 +67,8 @@ class AlphaZeroAgent(AgentBase):
         self._trained_policy_value_network._add_experience_to_buffer(board_vector_state, mcts_probs, self.colour)
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
-        mcts = MCTS(self.colour, max_simulation_length=self.turn_length, custom_trained_network=self._trained_policy_value_network)
-        best_move, visit_count_normalised_distribution = mcts.run(board)
+        mcts = MCTS(self.colour, max_simulation_length=self.turn_length, custom_trained_network=self._trained_policy_value_network, in_training=self._agent_in_training)
+        best_move, visit_count_normalised_distribution = mcts.run(board) # normalised distribution is None if not in training mode
 
         if self._agent_in_training:
             # add data to training buffer before modifying board

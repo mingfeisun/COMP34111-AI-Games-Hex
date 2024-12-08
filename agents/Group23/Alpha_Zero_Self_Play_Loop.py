@@ -16,9 +16,9 @@ class alpha_zero_self_play_loop:
     _board_size: int = 11
     _Student_Network = None
     _Teacher_Network = None
-    _max_games_per_simulation = 7
+    _max_games_per_simulation = 15
     _simulation_iterations = 50
-    _MCTS_turn_length_s = 3
+    _MCTS_turn_length_s = 6
     _game_log_location = "alpha_zero_self_play.log"
 
     def __init__(self):

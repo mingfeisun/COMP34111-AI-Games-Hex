@@ -7,15 +7,42 @@ from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
 
+import numpy as np
+
 from agents.Group23.alpha_zero_treenode import TreeNode
 
 class MCTS:
     """Implements the Monte Carlo Tree Search algorithm."""
 
-    def __init__(self, colour: Colour, max_simulation_length: float = 2.5, custom_trained_network=None):
+    def __init__(self, colour: Colour, max_simulation_length: float = 2.5, custom_trained_network=None, in_training=False):
         self.colour = colour  # Agent's colour
         self.max_simulation_length = max_simulation_length  # Length of a MCTS search in seconds
         self._trained_network = custom_trained_network
+        self._agent_in_training = in_training
+
+        if self._agent_in_training:
+            self.max_depth = 60
+        else:
+            self.max_depth = 30
+
+    def _get_average_value_distribution(self, node: TreeNode) -> list[list[float]]:
+        """Returns the average value distribution for the children of the given node.
+
+        Args:
+            node (TreeNode): current node
+
+        Returns:
+            list[list[float]]: average value distribution
+        """
+        visit_distribution = np.array(self._get_visit_count_distribution(node))
+        win_distribution = np.array(self._get_win_count_distribution(node))
+
+        if visit_distribution.shape != win_distribution.shape:
+            raise ValueError('Visit and win distributions have different shapes')
+        
+        average_value_distribution = win_distribution / visit_distribution
+
+        return average_value_distribution
 
     def _get_average_value_distribution(self, node: TreeNode) -> list[list[float]]:
         """Returns the average value distribution for the children of the given node.
@@ -106,14 +133,22 @@ class MCTS:
         print(f'Ran {iterations} simulations in {time.time() - start_time:.2f}s')
 
         # Choose the most visited child as the best move
-        best_child = max(root.children, key=lambda child: child.wins / child.visits)
+        best_child = max(
+            root.children,
+            key=lambda child: (
+                (np.sum(child.wins) / np.sum(child.visits)) if np.sum(child.visits) > 0 else float('-inf')
+            )
+        )
 
         print(f'Selected move with {best_child.visits} visits and {best_child.wins} wins from {len(root.children)} possible moves')
         print(f'Moves:')
         for child in root.children:
             print(f'  - Move: ({child.move.x, child.move.y}), Wins: {child.wins}, Visits: {child.visits}')
 
-        pd_distribution = self._get_average_value_distribution(root)
+        if self._agent_in_training:
+            pd_distribution = self._get_average_value_distribution(root)
+        else:
+            pd_distribution = None
         
         return best_child.move, pd_distribution
 
@@ -169,12 +204,11 @@ class MCTS:
         # Play randomly until the game ends
         current_colour = self.colour.opposite()
 
-        MAX_DEPTH = 50
         current_depth = 0
 
         while (not simulation_board.has_ended(colour=current_colour) and
                not simulation_board.has_ended(colour=current_colour.opposite()) and
-               MAX_DEPTH < current_depth):
+               self.max_depth < current_depth):
             
             current_depth += 1
             

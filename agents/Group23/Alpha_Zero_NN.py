@@ -9,6 +9,9 @@ import pandas as pd
 from src.Colour import Colour
 import ast
 
+# Resource reference for AlphaZero NN architecture
+# https://medium.com/applied-data-science/alphago-zero-explained-in-one-diagram-365f5abf67e0
+
 class Alpha_Zero_NN:
     _board_size = 11 # default board size
     _model = None # current model
@@ -34,6 +37,7 @@ class Alpha_Zero_NN:
         else:
             print("Creating new model - Model not found at path: ", path)
             self._model = self._create_model()
+            self._train()
 
     def __init__(self, board_size:int):
         """Initializes the AlphaZero neural network model
@@ -68,7 +72,8 @@ class Alpha_Zero_NN:
     def _create_value_head(self, input_layer: tf.Tensor) -> tf.Tensor:
         x = Conv2D(1, kernel_size=1, activation='relu', padding='same', kernel_regularizer=l2(1e-4))(input_layer)
         x = BatchNormalization()(x)
-        x = GlobalAveragePooling2D()(x)
+        x = ReLU()(x)
+        x = Flatten()(x)
         x = Dense(256, activation='relu', kernel_regularizer=l2(1e-4))(x)  # Fully connected layer for value refinement
         value_output = Dense(1, activation='tanh', name='value_head', kernel_regularizer=l2(1e-4))(x)
         return value_output
@@ -82,12 +87,12 @@ class Alpha_Zero_NN:
         x = ReLU()(x)
 
         # Stack residual blocks
-        for _ in range(10):  # Increase depth for better feature extraction
+        for _ in range(20):  # Increase depth for better feature extraction
             x = self._residual_block(x, filters=256)
 
         # Policy and Value heads
-        policy_head = self._create_policy_head(x)
         value_head = self._create_value_head(x)
+        policy_head = self._create_policy_head(x)
 
         # Combine into a single model
         model = Model(inputs=input_layer, outputs=[value_head, policy_head])
@@ -205,7 +210,7 @@ class Alpha_Zero_NN:
                 'value_head': train_z_values,
                 'policy_head': train_mcts_probs
             },
-            batch_size=128,
+            batch_size=32,
             epochs=100,
             validation_data=(
                 val_board_states,

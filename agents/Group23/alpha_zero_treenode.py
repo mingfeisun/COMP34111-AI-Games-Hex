@@ -10,6 +10,8 @@ from src.Colour import Colour
 from src.Move import Move
 from src.Tile import Tile
 
+import numpy as np
+
 class TreeNode:
     """Represents a node in the MCTS tree."""
 
@@ -92,10 +94,12 @@ class TreeNode:
         return max(
             self.children,
             key=lambda child: (
-                (child.wins / child.visits) +
-                exploration_param * math.sqrt(math.log(self.visits) / child.visits) +
-                self.policy_network_predictions[child.move.x][child.move.y]
-            ),
+                (np.sum(child.wins) / np.sum(child.visits)) +
+                exploration_param * math.sqrt(
+                    math.log(np.sum(self.visits)) / np.sum(child.visits)
+                ) +
+                float(self.policy_network_predictions[child.move.x][child.move.y])
+            ) if np.sum(child.visits) > 0 else float('-inf')
         )
 
     def add_child(self, move):
