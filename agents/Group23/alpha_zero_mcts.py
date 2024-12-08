@@ -13,10 +13,16 @@ from agents.Group23.alpha_zero_treenode import TreeNode
 class MCTS:
     """Implements the Monte Carlo Tree Search algorithm."""
 
-    def __init__(self, colour: Colour, max_simulation_length: float = 2.5, custom_trained_network=None):
+    def __init__(self, colour: Colour, max_simulation_length: float = 2.5, custom_trained_network=None, in_training=False):
         self.colour = colour  # Agent's colour
         self.max_simulation_length = max_simulation_length  # Length of a MCTS search in seconds
         self._trained_network = custom_trained_network
+        self._agent_in_training = in_training
+
+        if self._agent_in_training:
+            self.max_depth = 60
+        else:
+            self.max_depth = 30
 
     def _get_visit_count_distribution(self, node: TreeNode) -> list[list[int]]:
         """Returns the visit count distribution for the children of the given node.
@@ -78,7 +84,10 @@ class MCTS:
         for child in root.children:
             print(f'  - Move: ({child.move.x, child.move.y}), Wins: {child.wins}, Visits: {child.visits}')
 
-        pd_distribution = self._get_visit_count_distribution(root)
+        if self._agent_in_training:
+            pd_distribution = self._get_visit_count_distribution(root)
+        else:
+            pd_distribution = None
         
         return best_child.move, pd_distribution
 
@@ -134,12 +143,11 @@ class MCTS:
         # Play randomly until the game ends
         current_colour = self.colour.opposite()
 
-        MAX_DEPTH = 50
         current_depth = 0
 
         while (not simulation_board.has_ended(colour=current_colour) and
                not simulation_board.has_ended(colour=current_colour.opposite()) and
-               MAX_DEPTH < current_depth):
+               self.max_depth < current_depth):
             
             current_depth += 1
             
