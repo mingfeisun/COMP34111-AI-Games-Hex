@@ -43,7 +43,7 @@ class MCTS:
         for i in range(11):
             for j in range(11):
                 if visit_distribution[i][j] != 0:
-                    average_value_distribution[i][j] = win_distribution[i][j] / visit_distribution[i][j]
+                    average_value_distribution[i][j] = np.array(win_distribution[i][j] / visit_distribution[i][j]).item()
 
         return average_value_distribution
 

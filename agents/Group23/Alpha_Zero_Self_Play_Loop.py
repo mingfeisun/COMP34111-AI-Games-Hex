@@ -75,8 +75,8 @@ class alpha_zero_self_play_loop:
                 self._Teacher_Network._commit_experience_from_buffer(winner_colour=winner_colour)
                 sleep(2) # INCASE OF RACE CONDITION
 
-            # check majority win rate and swap networks if necessary after 70% win rate
-            if win_count/self._max_games_per_simulation > 0.7:
+            # check majority win rate and swap networks if necessary after 55% win rate
+            if win_count/self._max_games_per_simulation > 0.55:
                 self._swap_student_teacher_networks()
             else:
                 print("Majority win rate not reached, continuing training student without swapping networks")
