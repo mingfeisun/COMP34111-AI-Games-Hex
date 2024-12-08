@@ -1,6 +1,7 @@
 from copy import deepcopy
 import random
 import time
+import numpy as np
 
 from src.Board import Board
 from src.Colour import Colour
@@ -24,6 +25,44 @@ class MCTS:
         else:
             self.max_depth = 30
 
+    def _get_average_value_distribution(self, node: TreeNode) -> list[list[float]]:
+        """Returns the average value distribution for the children of the given node.
+
+        Args:
+            node (TreeNode): current node
+
+        Returns:
+            list[list[float]]: average value distribution
+        """
+        visit_distribution = np.array(self._get_visit_count_distribution(node))
+        win_distribution = np.array(self._get_win_count_distribution(node))
+
+        if visit_distribution.shape != win_distribution.shape:
+            raise ValueError('Visit and win distributions have different shapes')
+        
+        average_value_distribution = win_distribution / visit_distribution
+
+        return average_value_distribution
+
+    def _get_average_value_distribution(self, node: TreeNode) -> list[list[float]]:
+        """Returns the average value distribution for the children of the given node.
+
+        Args:
+            node (TreeNode): current node
+
+        Returns:
+            list[list[float]]: average value distribution
+        """
+        visit_distribution = np.array(self._get_visit_count_distribution(node))
+        win_distribution = np.array(self._get_win_count_distribution(node))
+
+        if visit_distribution.shape != win_distribution.shape:
+            raise ValueError('Visit and win distributions have different shapes')
+        
+        average_value_distribution = win_distribution / visit_distribution
+
+        return average_value_distribution
+
     def _get_visit_count_distribution(self, node: TreeNode) -> list[list[int]]:
         """Returns the visit count distribution for the children of the given node.
 
@@ -36,13 +75,22 @@ class MCTS:
         distribution_board = [[0 for _ in range(11)] for _ in range(11)]
         self._count_visits_DFS(node, distribution_board)
 
-        # softmax normalization
-        total_visits = sum(sum(row) for row in distribution_board)
-        for i in range(11):
-            for j in range(11):
-                distribution_board[i][j] /= total_visits
+        return distribution_board
+    
+    def _get_win_count_distribution(self, node: TreeNode) -> list[list[int]]:
+        """Returns the win count distribution for the children of the given node.
+        
+        Args:
+            node (TreeNode): current node
+
+        Returns:
+            list[list[int]]: win count distribution
+        """
+        distribution_board = [[0 for _ in range(11)] for _ in range(11)]
+        self._count_wins_DFS(node, distribution_board)
 
         return distribution_board
+
     
     def _count_visits_DFS(self, node: TreeNode, distribution_board: list[list[int]]):
         """Counts the visits for the children of the given node.
@@ -54,6 +102,19 @@ class MCTS:
         for child in node.children:
             x, y = child.move.x, child.move.y
             distribution_board[x][y] += child.visits
+            self._count_visits_DFS(child, distribution_board)
+    
+    def _count_wins_DFS(self, node: TreeNode, distribution_board: list[list[int]]):
+        """Counts the wins for the children of the given node.
+
+        Args:
+            node (TreeNode): current node
+            distribution_board (list[list[int]]): win count distribution passed by reference
+        """
+        
+        for child in node.children:
+            x, y = child.move.x, child.move.y
+            distribution_board[x][y] += child.wins
             self._count_visits_DFS(child, distribution_board)
 
 
@@ -85,7 +146,7 @@ class MCTS:
             print(f'  - Move: ({child.move.x, child.move.y}), Wins: {child.wins}, Visits: {child.visits}')
 
         if self._agent_in_training:
-            pd_distribution = self._get_visit_count_distribution(root)
+            pd_distribution = self._get_average_value_distribution(root)
         else:
             pd_distribution = None
         
@@ -201,6 +262,20 @@ class MCTS:
         Implements a default policy to select a simulation move.
         """
 
-        if len(moves) == 0:
-            raise ValueError("No legal moves available")
-        return random.choice(moves)
+        if self._trained_network is None:
+            return random.choice(moves)
+
+        # Use the neural network to select the best move
+        board_vector = self.get_board_vector(self.board)
+        move_distribution = self._trained_network.get_policy_value(board_vector)
+        
+        best_move_prob = 0
+        best_move = None
+        for i, in move_distribution:
+            for j in move_distribution[i]:
+                if move_distribution[i][j] > best_move_prob:
+                    best_move_prob = move_distribution[i][j]
+                    best_move = (i, j)
+        
+        best_move = Move(best_move[0], best_move[1])
+        return best_move
