@@ -95,7 +95,7 @@ class RepeatedSelfTrainer:
 
     def create_initial_model(self):
         config = self.config['CREATE MODEL']
-        create_model.create_and_store_model(config, self.get_model_name(0))
+        create_model.create_and_store_model(config, self.get_model_name(0), from_pretrained=True)
         return
 
     def create_data_samples(self, model_name, num_samples, verbose=True):
@@ -165,6 +165,9 @@ class RepeatedSelfTrainer:
             file.write('\n'.join(output))
 
     def get_best_rating(self):
+        print("Calculating ELO difference between best trained model and best reference model")
+        print("----------------------------------------------")
+        print("Reference models:" + str(self.reference_models))
         for reference_idx in range(1, len(self.reference_models)):
             self.measure_win_counts(self.reference_models[reference_idx],
                 self.reference_models[:reference_idx], verbose=False)
