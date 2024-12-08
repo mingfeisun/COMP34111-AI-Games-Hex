@@ -4,7 +4,7 @@ import copy
 import torch
 import torch.optim as optim
 
-from hexhex.creation.create_model import create_model
+from hexhex.creation.create_model import ModelType, create_model
 from hexhex.utils.logger import logger
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -37,7 +37,12 @@ def correct_position1d(position1d, board_size, player):
 
 def load_model(model_file, export_mode=False):
     checkpoint = torch.load(model_file, map_location=device)
-    model = create_model(checkpoint['config'], export_mode)
+    if "11_2w4_2000" in model_file:
+        model = create_model(checkpoint['config'], export_mode, model_type=ModelType.STANDARD)
+    elif "updated_attention_model" in model_file:
+        model = create_model(checkpoint['config'], export_mode, model_type=ModelType.ATTENTION)
+    else:
+        model = create_model(checkpoint['config'], export_mode, model_type=ModelType.ATTENTION)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     torch.no_grad()
