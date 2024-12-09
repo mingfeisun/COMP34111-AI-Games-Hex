@@ -1,5 +1,6 @@
 import math
 from copy import deepcopy
+import itertools
 
 from agents.Group23.chain import Chain
 from agents.Group23.utilities import Utilities
@@ -26,7 +27,9 @@ class TreeNode:
         self.chains = TreeNode.find_connected_chains(self.board, self.player)
         one_to_connect_moves = TreeNode.find_one_to_connect_moves(self.board, self.player, self.chains)
         one_possible_connect_moves = TreeNode.find_one_possible_connect_moves(self.board, self.player, self.chains)
-        self._moves = one_to_connect_moves | one_possible_connect_moves
+        blocking_moves = TreeNode.find_blockable_moves(self.board, self.player.opposite(), self.chains)
+        
+        self._moves = one_to_connect_moves | one_possible_connect_moves | blocking_moves
 
     def is_fully_expanded(self, legal_moves):
         """Checks if all possible moves have been expanded."""
@@ -283,3 +286,39 @@ class TreeNode:
         
         return moves
     
+    def find_blockable_moves(board: Board, colour: Colour, chains: set[Chain]) -> set[HeuristicMove]:
+        """
+        Finds one-to-connect moves with only one possible connection to the edge or another chain.
+        These moves are blockable by the opposing colour.
+        """
+        moves = set()
+
+        pairs = itertools.combinations(chains, 2)
+
+        for chain1, chain2 in pairs:
+            influence_region_1 = chain1.get_influence_region(board)
+            influence_region_2 = chain2.get_influence_region(board)
+            connections = influence_region_1 & influence_region_2
+
+            # Exactly one connection is a blockable move
+            if len(connections) == 1:
+                pos = connections.pop()
+
+                if colour == Colour.RED:
+                    type1, type2 = 'Top', 'Bottom'
+                elif colour == Colour.BLUE:
+                    type1, type2 = 'Left', 'Right'
+
+                if ((chain1.chain_type == type1 and chain2.chain_type == type2) or
+                    (chain1.chain_type == type2 and chain2.chain_type == type1)):
+                    moves.add(HeuristicMove(pos[0], pos[1], 1))
+                elif ((chain1.chain_type == type1 and chain2.chain_type != type2) or
+                      (chain1.chain_type == type2 and chain2.chain_type != type1)):
+                    moves.add(HeuristicMove(pos[0], pos[1], 2))
+                elif ((chain1.chain_type != type1 and chain2.chain_type == type2) or
+                      (chain1.chain_type != type2 and chain2.chain_type == type1)):
+                    moves.add(HeuristicMove(pos[0], pos[1], 2))
+                else: # Both chains are not connected to an edge
+                    moves.add(HeuristicMove(pos[0], pos[1], 4))
+
+        return moves
