@@ -14,6 +14,7 @@ class MCTS:
     def __init__(self, colour: Colour, max_simulation_length: float = 2.5, custom_trained_network=None):
         self.colour = colour  # Agent's colour
         self.max_simulation_length = max_simulation_length  # Length of a MCTS search in seconds
+        self.rave_const = 0.5  # RAVE constant to balance UCB and AMAF
 
     def _get_visit_count_distribution(self, node: TreeNode) -> list[list[int]]:
         """Returns the visit count distribution for the children of the given node.
@@ -47,37 +48,31 @@ class MCTS:
             self._count_visits_DFS(child, distribution_board)
 
 
-    def run(self, board: Board):
+    def run(self, root: TreeNode):
         """Performs MCTS simulations from the root node."""
-        root = TreeNode(board=board, player=self.colour)
-
         iterations = 0
         start_time = time.time()
         while time.time() - start_time < self.max_simulation_length:
             iterations += 1
             node = self._select(root)
-            result = self._simulate(node)
-            self._backpropagate(node, result)
+            self._simulate(node)
 
-        print(f'Ran {iterations} simulations in {time.time() - start_time:.2f}s')
+        finish_time = time.time()
+        print(f'Ran {iterations} simulations in {finish_time - start_time:.2f}s')
 
         # Choose the most visited child as the best move
         best_child = max(root.children, key=lambda child: child.wins / child.visits)
-
-        print(f'Selected move with {best_child.visits} visits and {best_child.wins} wins from {len(root.children)} possible moves')
-        print(f'Moves:')
-        for child in root.children:
-            print(f'  - Move: ({child.move.x, child.move.y}), Wins: {child.wins}, Visits: {child.visits}')
+        best_child.parent = None # Remove the parent reference to reduce memory overhead
 
         pd_distribution = self._get_visit_count_distribution(root)
         
-        return best_child.move, pd_distribution
+        return best_child, pd_distribution
 
     def _select(self, node: TreeNode):
         """Selects a node to expand using the UCT formula."""
         moves = self.get_heuristic_moves(node)
         while node.is_fully_expanded(moves):
-            node = node.best_child()
+            node = node.best_child(amaf=True)
         return self._expand(node)
 
     def _expand(self, node: TreeNode):
@@ -93,27 +88,37 @@ class MCTS:
 
     def _simulate(self, node: TreeNode):
         """Simulates a random game from the current node and returns the result."""
-        simulation_board = deepcopy(node.board)
+        # Stores the visited moves for backpropagation
+        visited_moves = []
 
         # Play randomly until the game ends
         current_colour = self.colour.opposite()
-        while (not simulation_board.has_ended(colour=current_colour) and
-               not simulation_board.has_ended(colour=current_colour.opposite())):
-            moves = self.get_all_moves(simulation_board)
+        while (not node.board.has_ended(colour=current_colour) and
+               not node.board.has_ended(colour=current_colour.opposite())):
+            moves = self.get_all_moves(node.board)
 
             move = self._default_policy(moves)
+            visited_moves.append(move)
 
-            x, y = move.x, move.y
-            simulation_board.set_tile_colour(x, y, current_colour)
+            node = node.add_child(move)
             current_colour = current_colour.opposite()
 
-        return 1 if simulation_board.get_winner() == self.colour else 0
+        result = 1 if node.board.get_winner() == self.colour else 0
+        self._backpropagate(node, result, visited_moves)
 
-    def _backpropagate(self, node: TreeNode, result: int):
+        return result
+
+    def _backpropagate(self, node: TreeNode, result: int, visited_moves: list[tuple[TreeNode, Move]]):
         """Backpropagates the simulation result through the tree."""
         while node is not None:
             node.visits += 1
             node.wins += result
+
+            for child in node.children:
+                if child.move in visited_moves:
+                    child.amaf_visits += 1
+                    child.amaf_wins += result
+
             node = node.parent
             result = 1 - result  # Invert the result for the opponent's perspective
 
