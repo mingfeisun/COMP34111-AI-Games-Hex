@@ -1,6 +1,7 @@
 import logging
 from random import choice
 
+from agents.Group23.treenode import TreeNode
 from src.AgentBase import AgentBase
 from src.Move import Move
 from src.Board import Board
@@ -59,9 +60,10 @@ class MCTSAgent(AgentBase):
 
         turn_length = self.allowed_time(turn)
         mcts = MCTS(self.colour, max_simulation_length=turn_length)
-        best_move, _ = mcts.run(board)
+        root = TreeNode(board=board, player=self.colour)
+        best_child, _ = mcts.run(root)
 
-        return best_move
+        return best_child.move
     
     def allowed_time(self, turn_number, total_turns=121, total_time=300):
         """

@@ -21,8 +21,13 @@ class TreeNode:
         self.children = []  # List of child nodes
         self.player = player  # The player to move at this node
 
+        # ucb values
         self.visits = 0  # Number of times this node has been visited
         self.wins = 0  # Number of wins from this node
+
+        # amaf values
+        self.amaf_visits = 0
+        self.amaf_wins = 0
 
         self.chains = TreeNode.find_connected_chains(self.board, self.player)
         one_to_connect_moves = TreeNode.find_one_to_connect_moves(self.board, self.player, self.chains)
@@ -41,9 +46,27 @@ class TreeNode:
             self.children,
             key=lambda child: (child.wins / child.visits) + exploration_param * math.sqrt(math.log(self.visits) / child.visits)
         )
+    
+    def uct_amaf_value(self, exploration_param=math.sqrt(2), rave_const=0.5):
+        """Calculates the UCT-AMAF value for a node."""
+        uct_value = (self.wins / self.visits) + exploration_param * math.sqrt(math.log(self.parent.visits) / self.visits)
+        amaf_value = self.amaf_wins / self.amaf_visits if self.amaf_visits > 0 else 0
+
+        beta = rave_const / (self.visits + self.amaf_visits + rave_const)
+
+        return (1 - beta) * uct_value + beta * amaf_value
 
     def add_child(self, move):
-        """Adds a child node for a move."""
+        """
+        Adds a child node for a move.
+        Returns the child if it already exists.
+        """
+        # Check if the child already exists
+        for child in self.children:
+            if child.move == move:
+                return child
+
+        # Create a new child
         new_board = deepcopy(self.board)
         new_board.set_tile_colour(move.x, move.y, self.player)
         child_node = TreeNode(board=new_board, 
