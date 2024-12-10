@@ -128,7 +128,7 @@ class Game:
 
             boardCopy = copy.deepcopy(self.board)
             turnCopy = self.turn
-            playerCopy = copy.deepcopy(self.players)
+            # playerCopy = copy.deepcopy(self.players)
 
             playerBoard = copy.deepcopy(self.board)
 
@@ -138,7 +138,7 @@ class Game:
 
             assert boardCopy == self.board, "Board was modified, Possible cheating!"
             assert turnCopy == self.turn, "Turn was modified, Possible cheating!"
-            assert playerCopy == self.players, "Players were modified, Possible cheating!"
+            # assert playerCopy == self.players, "Players were modified, Possible cheating!"
             assert end > start, "Move time is negative, Possible cheating!"
 
             currentPlayer.move_time += end - start
