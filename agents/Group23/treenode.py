@@ -40,21 +40,31 @@ class TreeNode:
         """Checks if all possible moves have been expanded."""
         return len(self.children) == len(legal_moves)
 
-    def best_child(self, exploration_param=math.sqrt(2)):
+    def best_child(self, exploration_param=math.sqrt(2), amaf=False):
         """Selects the best child using UCT."""
-        return max(
-            self.children,
-            key=lambda child: (child.wins / child.visits) + exploration_param * math.sqrt(math.log(self.visits) / child.visits)
-        )
+        if amaf:
+            return max(
+                self.children,
+                key=lambda child: child.uct_amaf_value(exploration_param)
+            )
+        else:
+            return max(
+                self.children,
+                key=lambda child: child.uct_value(exploration_param)
+            )
     
     def uct_amaf_value(self, exploration_param=math.sqrt(2), rave_const=0.5):
         """Calculates the UCT-AMAF value for a node."""
-        uct_value = (self.wins / self.visits) + exploration_param * math.sqrt(math.log(self.parent.visits) / self.visits)
+        uct_value = self.uct_value(exploration_param)
         amaf_value = self.amaf_wins / self.amaf_visits if self.amaf_visits > 0 else 0
 
         beta = rave_const / (self.visits + self.amaf_visits + rave_const)
 
         return (1 - beta) * uct_value + beta * amaf_value
+    
+    def uct_value(self, exploration_param=math.sqrt(2)):
+        """Calculates the UCT value for a node."""
+        return (self.wins / self.visits) + exploration_param * math.sqrt(math.log(self.parent.visits) / self.visits)
 
     def add_child(self, move):
         """
@@ -77,11 +87,14 @@ class TreeNode:
         return child_node
     
     def get_child(self, move):
-        """Gets the child node for a move."""
+        """
+        Gets the child node for a move.
+        Adds the child if it does not exist.
+        """
         for child in self.children:
             if child.move == move:
                 return child
-        return None
+        return self.add_child(move)
     
     @property
     def moves(self) -> list[HeuristicMove]:

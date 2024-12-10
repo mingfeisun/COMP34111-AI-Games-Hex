@@ -45,6 +45,7 @@ class MCTSAgent(AgentBase):
     def __init__(self, colour: Colour, max_simulation_length: float = 2.5):
         super().__init__(colour)
         self.max_simulation_length = max_simulation_length # max length of a simulation
+        self.root = None
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """Selects a move using MCTS."""
@@ -60,10 +61,23 @@ class MCTSAgent(AgentBase):
 
         turn_length = self.allowed_time(turn)
         mcts = MCTS(self.colour, max_simulation_length=turn_length)
-        root = TreeNode(board=board, player=self.colour)
-        best_child, _ = mcts.run(root)
 
-        return best_child.move
+        if self.root is None:
+            self.root = TreeNode(board=board, player=self.colour)
+
+        self.root = self.root.get_child(opp_move) # Update the node to the child corresponding to the opponent's move
+        self.root, _ = mcts.run(self.root)
+
+        print(f'====================')
+        print(f'Chose best child:')
+        print(f' - Move: {self.root.move}')
+        print(f' - Wins: {self.root.wins}')
+        print(f' - Visits: {self.root.visits}')
+        print(f' - AMAF Wins: {self.root.amaf_wins}')
+        print(f' - AMAF Visits: {self.root.amaf_visits}')
+        print(f'====================')
+
+        return self.root.move
     
     def allowed_time(self, turn_number, total_turns=121, total_time=300):
         """

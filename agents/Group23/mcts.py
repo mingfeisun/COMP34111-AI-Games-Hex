@@ -62,6 +62,7 @@ class MCTS:
 
         # Choose the most visited child as the best move
         best_child = max(root.children, key=lambda child: child.wins / child.visits)
+        best_child.parent = None # Remove the parent reference to reduce memory overhead
 
         pd_distribution = self._get_visit_count_distribution(root)
         
@@ -71,7 +72,7 @@ class MCTS:
         """Selects a node to expand using the UCT formula."""
         moves = self.get_heuristic_moves(node)
         while node.is_fully_expanded(moves):
-            node = node.best_child()
+            node = node.best_child(amaf=True)
         return self._expand(node)
 
     def _expand(self, node: TreeNode):
@@ -87,8 +88,8 @@ class MCTS:
 
     def _simulate(self, node: TreeNode):
         """Simulates a random game from the current node and returns the result."""
-        # Stores the visited nodes for backpropagation, in the form (node, move), where move is the move chosen at that node
-        visited_nodes = []
+        # Stores the visited moves for backpropagation
+        visited_moves = []
 
         # Play randomly until the game ends
         current_colour = self.colour.opposite()
@@ -97,20 +98,18 @@ class MCTS:
             moves = self.get_all_moves(node.board)
 
             move = self._default_policy(moves)
-            visited_nodes.append((node, move))
+            visited_moves.append(move)
 
             node = node.add_child(move)
             current_colour = current_colour.opposite()
 
         result = 1 if node.board.get_winner() == self.colour else 0
-        self._backpropagate(node, result, visited_nodes)
+        self._backpropagate(node, result, visited_moves)
 
         return result
 
-    def _backpropagate(self, node: TreeNode, result: int, visited_nodes: list[tuple[TreeNode, Move]]):
+    def _backpropagate(self, node: TreeNode, result: int, visited_moves: list[tuple[TreeNode, Move]]):
         """Backpropagates the simulation result through the tree."""
-        visited_moves = [move for _, move in visited_nodes]
-
         while node is not None:
             node.visits += 1
             node.wins += result
