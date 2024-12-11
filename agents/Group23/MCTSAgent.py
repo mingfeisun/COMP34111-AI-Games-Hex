@@ -8,6 +8,7 @@ from src.Board import Board
 from src.Colour import Colour
 
 from agents.Group23.mcts import MCTS
+from agents.Group23.zobrist_hasher import ZobristHasher
 
 class MCTSAgent(AgentBase):
     """An agent that uses MCTS for Hex."""
@@ -46,6 +47,7 @@ class MCTSAgent(AgentBase):
         super().__init__(colour)
         self.max_simulation_length = max_simulation_length # max length of a simulation
         self.root = None
+        self.zobrist_hasher = ZobristHasher(11)
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """Selects a move using MCTS."""
@@ -58,6 +60,13 @@ class MCTSAgent(AgentBase):
             # If the opponent makes a strong opening move, use the pie rule to swap.
             self.logger.info('Opponent made a strong opening move, swapping.')
             return Move(-1, -1)
+        
+        # Look up move in transpotition table (if available)
+        hash = self.zobrist_hasher.hash(board)
+        move = self.zobrist_hasher.get_move(hash)
+        if move is not None:
+            self.logger.info(f'!!!!!!!!!!!!!!!!!!!!!!!!!! Found a move in the transposition table: ({move[0]}, {move[1]}) !!!!!!!!!!!!!!!!!!!!!!!!!!')
+            return Move(move[0], move[1])
 
         turn_length = self.allowed_time(turn)
         mcts = MCTS(self.colour, max_simulation_length=turn_length)

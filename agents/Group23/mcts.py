@@ -54,6 +54,9 @@ class MCTS:
         while time.time() - start_time < self.max_simulation_length:
             iterations += 1
             node = self._select(root)
+            # run (#CPUs) simulations in parallel
+            # list[tuple[board, int]] = self._simulate(node.board, self.colour)
+            # backpropagate
             result = self._simulate(node.board, self.colour)
             self._backpropagate(node, result)
 
