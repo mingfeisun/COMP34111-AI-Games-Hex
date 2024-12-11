@@ -89,6 +89,7 @@ class MCTS:
     def _simulate(self, board: Board, colour: Colour):
         """Simulates a random game from the current node and returns the result."""
         # Stores the visited moves for backpropagation
+        player = colour
         board = deepcopy(board)
 
         # Play randomly until the game ends
@@ -105,7 +106,7 @@ class MCTS:
             
             colour = colour.opposite()
 
-        result = 1 if board.get_winner() == self.colour else 0
+        result = 1 if board.get_winner() == colour else 0
         return result
 
     def _backpropagate(self, node: TreeNode, result: int):
