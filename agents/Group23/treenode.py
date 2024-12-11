@@ -54,7 +54,7 @@ class TreeNode:
         """
         # Check if the child already exists
         for child in self.children:
-            if child.move == move:
+            if child.move.x == move.x and child.move.y == move.y:
                 return child
 
         # Create a new child
@@ -73,7 +73,7 @@ class TreeNode:
         Adds the child if it does not exist.
         """
         for child in self.children:
-            if child.move == move:
+            if child.move.x == move.x and child.move.y == move.y:
                 return child
         return self.add_child(move)
     

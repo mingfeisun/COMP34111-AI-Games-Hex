@@ -78,7 +78,7 @@ class MCTS:
     def _expand(self, node: TreeNode):
         """Expands the node by adding a new child."""
         moves = self.get_heuristic_moves(node)
-        unvisited_moves = [move for move in moves if move not in [child.move for child in node.children]]
+        unvisited_moves = [move for move in moves if (move.x, move.y) not in [(child.move.x, child.move.y) for child in node.children]]
 
         if len(unvisited_moves) > 0:
             new_move = random.choice(unvisited_moves)
