@@ -141,6 +141,7 @@ class MCTS:
 
         if len(moves) == 0:
             moves = self.get_all_moves(node.board)
+            #TODO add inferio cell pattern matching here, instead of returning all moves
 
         return moves
 
