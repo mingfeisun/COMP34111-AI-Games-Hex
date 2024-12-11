@@ -78,7 +78,7 @@ class MCTS:
     def _expand(self, node: TreeNode):
         """Expands the node by adding a new child."""
         moves = self.get_heuristic_moves(node)
-        unvisited_moves = [move for move in moves if move not in [child.move for child in node.children]]
+        unvisited_moves = [move for move in moves if (move.x, move.y) not in [(child.move.x, child.move.y) for child in node.children]]
 
         if len(unvisited_moves) > 0:
             new_move = random.choice(unvisited_moves)
@@ -89,7 +89,7 @@ class MCTS:
     def _simulate(self, node: TreeNode):
         """Simulates a random game from the current node and returns the result."""
         # Stores the visited moves for backpropagation
-        visited_moves = []
+        visited_moves = set()
 
         # Play randomly until the game ends
         current_colour = self.colour.opposite()
@@ -98,7 +98,10 @@ class MCTS:
             moves = self.get_all_moves(node.board)
 
             move = self._default_policy(moves)
-            visited_moves.append(move)
+
+            # use tuple of coordinates for speed
+            x, y = move.x, move.y
+            visited_moves.add((x, y))
 
             node = node.add_child(move)
             current_colour = current_colour.opposite()
@@ -108,14 +111,15 @@ class MCTS:
 
         return result
 
-    def _backpropagate(self, node: TreeNode, result: int, visited_moves: list[tuple[TreeNode, Move]]):
+    def _backpropagate(self, node: TreeNode, result: int, visited_moves: set[tuple[int, int]]):
         """Backpropagates the simulation result through the tree."""
         while node is not None:
             node.visits += 1
             node.wins += result
 
             for child in node.children:
-                if child.move in visited_moves:
+                x, y = child.move.x, child.move.y
+                if (x, y) in visited_moves:
                     child.amaf_visits += 1
                     child.amaf_wins += result
 

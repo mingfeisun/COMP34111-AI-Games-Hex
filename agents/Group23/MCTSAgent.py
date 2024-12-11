@@ -75,6 +75,7 @@ class MCTSAgent(AgentBase):
         print(f' - Visits: {self.root.visits}')
         print(f' - AMAF Wins: {self.root.amaf_wins}')
         print(f' - AMAF Visits: {self.root.amaf_visits}')
+        print(f'From {len(self.root.children)} possible moves.')
         print(f'====================')
 
         return self.root.move
