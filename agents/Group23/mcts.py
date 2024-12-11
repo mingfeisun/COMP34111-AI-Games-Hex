@@ -106,7 +106,7 @@ class MCTS:
             
             colour = colour.opposite()
 
-        result = 1 if board.get_winner() == colour else 0
+        result = 1 if board.get_winner() == player else 0
         return result
 
     def _backpropagate(self, node: TreeNode, result: int):
