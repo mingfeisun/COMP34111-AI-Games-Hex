@@ -14,7 +14,6 @@ class MCTS:
     def __init__(self, colour: Colour, max_simulation_length: float = 2.5, custom_trained_network=None):
         self.colour = colour  # Agent's colour
         self.max_simulation_length = max_simulation_length  # Length of a MCTS search in seconds
-        self.rave_const = 0.5  # RAVE constant to balance UCB and AMAF
 
     def _get_visit_count_distribution(self, node: TreeNode) -> list[list[int]]:
         """Returns the visit count distribution for the children of the given node.
@@ -55,7 +54,8 @@ class MCTS:
         while time.time() - start_time < self.max_simulation_length:
             iterations += 1
             node = self._select(root)
-            self._simulate(node)
+            result = self._simulate(node.board, self.colour)
+            self._backpropagate(node, result)
 
         finish_time = time.time()
         print(f'Ran {iterations} simulations in {finish_time - start_time:.2f}s')
@@ -72,7 +72,7 @@ class MCTS:
         """Selects a node to expand using the UCT formula."""
         moves = self.get_heuristic_moves(node)
         while node.is_fully_expanded(moves):
-            node = node.best_child(amaf=True)
+            node = node.best_child()
         return self._expand(node)
 
     def _expand(self, node: TreeNode):
@@ -86,42 +86,33 @@ class MCTS:
 
         return node
 
-    def _simulate(self, node: TreeNode):
+    def _simulate(self, board: Board, colour: Colour):
         """Simulates a random game from the current node and returns the result."""
         # Stores the visited moves for backpropagation
-        visited_moves = set()
+        board = deepcopy(board)
 
         # Play randomly until the game ends
-        current_colour = self.colour.opposite()
-        while (not node.board.has_ended(colour=current_colour) and
-               not node.board.has_ended(colour=current_colour.opposite())):
-            moves = self.get_all_moves(node.board)
+        while (not board.has_ended(colour=colour) and
+               not board.has_ended(colour=colour.opposite())):
+            moves = self.get_all_moves(board)
 
             move = self._default_policy(moves)
 
             # use tuple of coordinates for speed
             x, y = move.x, move.y
-            visited_moves.add((x, y))
 
-            node = node.add_child(move)
-            current_colour = current_colour.opposite()
+            board.set_tile_colour(x, y, colour)
+            
+            colour = colour.opposite()
 
-        result = 1 if node.board.get_winner() == self.colour else 0
-        self._backpropagate(node, result, visited_moves)
-
+        result = 1 if board.get_winner() == self.colour else 0
         return result
 
-    def _backpropagate(self, node: TreeNode, result: int, visited_moves: set[tuple[int, int]]):
+    def _backpropagate(self, node: TreeNode, result: int):
         """Backpropagates the simulation result through the tree."""
         while node is not None:
             node.visits += 1
             node.wins += result
-
-            for child in node.children:
-                x, y = child.move.x, child.move.y
-                if (x, y) in visited_moves:
-                    child.amaf_visits += 1
-                    child.amaf_wins += result
 
             node = node.parent
             result = 1 - result  # Invert the result for the opponent's perspective
