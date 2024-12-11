@@ -25,10 +25,6 @@ class TreeNode:
         self.visits = 0  # Number of times this node has been visited
         self.wins = 0  # Number of wins from this node
 
-        # amaf values
-        self.amaf_visits = 0
-        self.amaf_wins = 0
-
         self.chains = TreeNode.find_connected_chains(self.board, self.player)
         one_to_connect_moves = TreeNode.find_one_to_connect_moves(self.board, self.player, self.chains)
         one_possible_connect_moves = TreeNode.find_one_possible_connect_moves(self.board, self.player, self.chains)
@@ -40,29 +36,14 @@ class TreeNode:
         """Checks if all possible moves have been expanded."""
         return len(self.children) == len(legal_moves)
 
-    def best_child(self, exploration_param=math.sqrt(2), amaf=False):
+    def best_child(self, exploration_param=0.7):
         """Selects the best child using UCT."""
-        if amaf:
-            return max(
-                self.children,
-                key=lambda child: child.uct_amaf_value(exploration_param)
-            )
-        else:
-            return max(
-                self.children,
-                key=lambda child: child.uct_value(exploration_param)
-            )
+        return max(
+            self.children,
+            key=lambda child: child.uct_value(exploration_param)
+        )
     
-    def uct_amaf_value(self, exploration_param=math.sqrt(2), rave_const=0.5):
-        """Calculates the UCT-AMAF value for a node."""
-        uct_value = self.uct_value(exploration_param)
-        amaf_value = self.amaf_wins / self.amaf_visits if self.amaf_visits > 0 else 0
-
-        beta = rave_const / (self.visits + self.amaf_visits + rave_const)
-
-        return (1 - beta) * uct_value + beta * amaf_value
-    
-    def uct_value(self, exploration_param=math.sqrt(2)):
+    def uct_value(self, exploration_param=0.7):
         """Calculates the UCT value for a node."""
         return (self.wins / self.visits) + exploration_param * math.sqrt(math.log(self.parent.visits) / self.visits)
 
