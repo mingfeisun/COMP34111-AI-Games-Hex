@@ -54,6 +54,9 @@ class MCTS:
         while time.time() - start_time < self.max_simulation_length:
             iterations += 1
             node = self._select(root)
+            # run (#CPUs) simulations in parallel
+            # list[tuple[board, int]] = self._simulate(node.board, self.colour)
+            # backpropagate
             result = self._simulate(node.board, self.colour)
             self._backpropagate(node, result)
 
@@ -130,6 +133,13 @@ class MCTS:
         https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=4406406
         """
         moves = node.moves
+        print('======================================')
+        print(f'Retrieved {len(moves)} moves from the node.')
+        print(f'Moves:')
+        for move in moves:
+            print(f' - ({move.x}, {move.y}): priority {move.priority}')
+        
+        moves = [Move(move.x, move.y) for move in moves]
 
         if len(moves) == 0:
             moves = self.get_all_moves(node.board)
