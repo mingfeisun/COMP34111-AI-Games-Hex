@@ -16,6 +16,9 @@ class AttentionBlock(nn.Module):
         self.fc2 = nn.Conv2d(channels // 8, channels, kernel_size=1, bias=False)
         self.sigmoid = nn.Sigmoid()
 
+        self.channel_attention_scale = 0.098
+        self.spatial_attention_scale = 0.115
+
         # Spatial Attention
         self.conv = nn.Conv2d(2, 1, kernel_size=7, padding=3, bias=False)
 
@@ -25,14 +28,14 @@ class AttentionBlock(nn.Module):
         max_out = self.fc2(F.relu(self.fc1(self.global_max_pool(x))))
         channel_attention = self.sigmoid(avg_out + max_out)
 
-        x = x * (1 + channel_attention_scale * (channel_attention - 1))
+        x = x * (1 + self.channel_attention_scale * (channel_attention - 1))
 
         # Spatial Attention
         avg_out = torch.mean(x, dim=1, keepdim=True)
         max_out, _ = torch.max(x, dim=1, keepdim=True)
         spatial_attention = self.sigmoid(self.conv(torch.cat([avg_out, max_out], dim=1)))
 
-        x = x * (1 + spatial_attention_scale * (spatial_attention - 1))
+        x = x * (1 + self.spatial_attention_scale * (spatial_attention - 1))
 
         return x
 
