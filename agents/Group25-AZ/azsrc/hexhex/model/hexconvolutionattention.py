@@ -16,13 +16,13 @@ class AttentionBlock(nn.Module):
         self.fc2 = nn.Conv2d(channels // 8, channels, kernel_size=1, bias=False)
         self.sigmoid = nn.Sigmoid()
 
-        self.channel_attention_scale = 0.098
-        self.spatial_attention_scale = 0.115
+        self.channel_attention_scale = 0.042
+        self.spatial_attention_scale = 0.0625
 
         # Spatial Attention
         self.conv = nn.Conv2d(2, 1, kernel_size=7, padding=3, bias=False)
 
-    def forward(self, x, channel_attention_scale=0.12, spatial_attention_scale=0.15):
+    def forward(self, x):
         # Channel Attention
         avg_out = self.fc2(F.relu(self.fc1(self.global_avg_pool(x))))
         max_out = self.fc2(F.relu(self.fc1(self.global_max_pool(x))))
