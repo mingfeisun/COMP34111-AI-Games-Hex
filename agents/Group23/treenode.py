@@ -78,7 +78,7 @@ class TreeNode:
         return self.add_child(move)
     
     @property
-    def moves(self) -> list[HeuristicMove]:
+    def moves(self) -> set[HeuristicMove]:
         ordered_moves = {
             1: set(),
             2: set(),
@@ -92,7 +92,7 @@ class TreeNode:
         # Only return moves of the highest priority
         for moves in ordered_moves.values():
             if len(moves) > 0:
-                return [Move(m.x, m.y) for m in moves]
+                return moves
         return set()
     
 

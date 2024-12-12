@@ -65,7 +65,6 @@ class MCTSAgent(AgentBase):
         hash = self.zobrist_hasher.hash(board)
         move = self.zobrist_hasher.get_move(hash)
         if move is not None:
-            self.logger.info(f'!!!!!!!!!!!!!!!!!!!!!!!!!! Found a move in the transposition table: ({move[0]}, {move[1]}) !!!!!!!!!!!!!!!!!!!!!!!!!!')
             return Move(move[0], move[1])
 
         turn_length = self.allowed_time(turn)
@@ -76,14 +75,6 @@ class MCTSAgent(AgentBase):
 
         self.root = self.root.get_child(opp_move) # Update the node to the child corresponding to the opponent's move
         self.root, _ = mcts.run(self.root)
-
-        print(f'====================')
-        print(f'Chose best child:')
-        print(f' - Move: {self.root.move}')
-        print(f' - Wins: {self.root.wins}')
-        print(f' - Visits: {self.root.visits}')
-        print(f'From {len(self.root.children)} possible moves.')
-        print(f'====================')
 
         return self.root.move
     
