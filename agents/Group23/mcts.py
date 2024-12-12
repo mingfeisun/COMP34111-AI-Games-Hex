@@ -36,29 +36,29 @@ class MCTS:
 
     def run(self, root: TreeNode):
         """Performs MCTS simulations from the root node."""
-        
-        _root = deepcopy(root)
+
+        root.children = []
 
         iterations = 0
         start_time = time.time()
         number_of_workers = 8
         # result = self._simulate(node.board, self.colour)
         with Pool(number_of_workers) as p:
-            results = p.starmap(self.run_simulation_with_process, [(_root, self.colour, start_time)] * number_of_workers)
+            results = p.starmap(self.run_simulation_with_process, [(root, self.colour, start_time)] * number_of_workers)
         for result in results:
             iterations += result[1]
             for child in result[0].children:
-                if child not in _root.children:
-                    _root.children.append(child)
+                if child not in root.children:
+                    root.children.append(child)
                 else:
-                    _root.children[root.children.index(child)].visits += child.visits
-                    _root.children[root.children.index(child)].wins += child.wins
+                    root.children[root.children.index(child)].visits += child.visits
+                    root.children[root.children.index(child)].wins += child.wins
 
         finish_time = time.time()
         print(f'Ran {iterations} simulations in {finish_time - start_time:.2f}s')
 
         # Choose the most visited child as the best move if visits > 0, otherwise -inf
-        best_child = max(_root.children, key=lambda child: child.wins / child.visits if child.visits > 0 else float('-inf'))
+        best_child = max(root.children, key=lambda child: child.wins / child.visits if child.visits > 0 else float('-inf'))
         best_child.parent = None # Remove the parent reference to reduce memory overhead
         
         return best_child, None
