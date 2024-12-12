@@ -1,10 +1,12 @@
 from copy import deepcopy
 import random
 import time
+import os
 
 from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
+from multiprocessing import Pool
 
 from agents.Group23.treenode import TreeNode
 
@@ -15,61 +17,56 @@ class MCTS:
         self.colour = colour  # Agent's colour
         self.max_simulation_length = max_simulation_length  # Length of a MCTS search in seconds
 
-    def _get_visit_count_distribution(self, node: TreeNode) -> list[list[int]]:
-        """Returns the visit count distribution for the children of the given node.
+    def run_simulation_with_process(self, root: TreeNode, colour: Colour,start_time: float) -> int:
+        """Runs a simulation with a new process."""
 
-        Args:
-            node (TreeNode): current node
+        iterations = 0
 
-        Returns:
-            list[list[int]]: visit count distribution
-        """
-        distribution_board = [[0 for _ in range(11)] for _ in range(11)]
-        self._count_visits_DFS(node, distribution_board)
+        while time.time() - start_time < self.max_simulation_length:
+            node = self._select(root)
+            result = self._simulate(node.board, colour)
+            self._backpropagate(node, result)
+            iterations += 1
 
-        # softmax normalization
-        total_visits = sum(sum(row) for row in distribution_board)
-        for i in range(11):
-            for j in range(11):
-                distribution_board[i][j] /= total_visits
-        return distribution_board
-    
-    def _count_visits_DFS(self, node: TreeNode, distribution_board: list[list[int]]):
-        """Counts the visits for the children of the given node.
+        # delete second children
+        for child in root.children:
+            for grandchild in child.children:
+                del grandchild
 
-        Args:
-            node (TreeNode): current node
-            distribution_board (list[list[int]]): visit count distribution passed by reference
-        """
-        for child in node.children:
-            x, y = child.move.x, child.move.y
-            distribution_board[x][y] += child.visits
-            self._count_visits_DFS(child, distribution_board)
-
+        return root, iterations
 
     def run(self, root: TreeNode):
         """Performs MCTS simulations from the root node."""
+
+        _root = deepcopy(root)
+
         iterations = 0
         start_time = time.time()
-        while time.time() - start_time < self.max_simulation_length:
-            iterations += 1
-            node = self._select(root)
-            # run (#CPUs) simulations in parallel
-            # list[tuple[board, int]] = self._simulate(node.board, self.colour)
-            # backpropagate
-            result = self._simulate(node.board, self.colour)
-            self._backpropagate(node, result)
+        number_of_workers = os.cpu_count()
+
+        if number_of_workers is None:
+            number_of_workers = 8
+
+        # result = self._simulate(node.board, self.colour)
+        with Pool(number_of_workers) as p:
+            results = p.starmap(self.run_simulation_with_process, [(_root, self.colour, start_time)] * number_of_workers)
+        for result in results:
+            iterations += result[1]
+            for child in result[0].children:
+                if child not in _root.children:
+                    _root.children.append(child)
+                else:
+                    _root.children[_root.children.index(child)].visits += child.visits
+                    _root.children[_root.children.index(child)].wins += child.wins
 
         finish_time = time.time()
         print(f'Ran {iterations} simulations in {finish_time - start_time:.2f}s')
 
-        # Choose the most visited child as the best move
-        best_child = max(root.children, key=lambda child: child.wins / child.visits)
+        # Choose the most visited child as the best move if visits > 0, otherwise -inf
+        best_child = max(_root.children, key=lambda child: child.wins / child.visits if child.visits > 0 else float('-inf'))
         best_child.parent = None # Remove the parent reference to reduce memory overhead
-
-        pd_distribution = self._get_visit_count_distribution(root)
         
-        return best_child, pd_distribution
+        return best_child, None
 
     def _select(self, node: TreeNode):
         """Selects a node to expand using the UCT formula."""

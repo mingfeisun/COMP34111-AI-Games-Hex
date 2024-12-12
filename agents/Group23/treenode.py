@@ -1,21 +1,57 @@
 import math
 from copy import deepcopy
 import itertools
-
+import numpy as np
 from agents.Group23.chain import Chain
 from agents.Group23.utilities import Utilities
 from agents.Group23.heuristic_move import HeuristicMove
-
 from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
 from src.Tile import Tile
 
+@staticmethod
+def _board_tiles_to_compact_array(board: Board, size:int) -> list[int]:
+    """Converts the board tiles to a compact array."""
+
+    tiles = np.zeros((size, size), dtype=int)
+
+    for i in range(size):
+        for j in range(size):
+            tiles[i][j] = 1 if board.tiles[i][j].colour == Colour.RED else 2 if board.tiles[i][j].colour == Colour.BLUE else 0
+
+    return tiles.flatten().tolist()
+
+@staticmethod
+def _compact_array_to_board_tiles(compact_array: list[int], size: int) -> list[list[Tile]]:
+    """Converts a compact array to board tiles."""
+    tiles = []
+    for i in range(size):
+        new_line = []
+        for j in range(size):
+            value = compact_array[i * size + j]
+            if value == 1:
+                new_line.append(Tile(i, j, Colour.RED))
+            elif value == 2:
+                new_line.append(Tile(i, j, Colour.BLUE))
+            else:
+                new_line.append(Tile(i, j))
+        tiles.append(new_line)
+    return tiles
+
 class TreeNode:
     """Represents a node in the MCTS tree."""
+    
+    @property
+    def board(self) -> Board:
+        b = Board(self.board_size)
+        b._tiles = _compact_array_to_board_tiles(self._board, self.board_size)
+        return b
 
     def __init__(self, board, player, move=None, parent=None):
-        self.board = board  # The board state at this node
+        self.board_size = board._size
+        self._board = _board_tiles_to_compact_array(board, self.board_size)
+        
         self.move = move  # The move that led to this node
         self.parent = parent  # Parent node
         self.children = []  # List of child nodes
