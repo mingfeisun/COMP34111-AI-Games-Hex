@@ -141,9 +141,7 @@ class MCTS:
 
         if len(moves) == 0:
             moves = self.get_all_moves(node.board)
-            #TODO add inferio cell pattern matching here, instead of returning all moves
-            #print(moves)
-            #print(node.board)
+
             moves = self._removeInferiorCells(moves, node.board)
 
         return moves
@@ -158,43 +156,33 @@ class MCTS:
     
     def _removeInferiorCells(self, moves, board):
 
-        movesOut = []   
-        for move in moves:
-            if self._patternMatch(move, board): #if move is a dead cell remove from output
-                continue
-            movesOut.append(move)
+        movesOut = [move for move in moves if not self._patternMatch(move, board)]
         return movesOut
     
+    
+    offsets = [(0,-1),(1,-1),(1,0),(0,1),(-1,1),(-1,0)] #neighbour offsets
+    colours = [Colour.RED,Colour.BLUE]
+    patterns = [["A","A","C1","C1","C1","C1"],["A","C1","C1","A","C2","C2"],["C1","C1","C1","A","C2","A"]]
+
     def _patternMatch(self, move, board):
         #boardActual = board
         board = board._tiles
         if board[move._x][move._y]._colour != None:
             return False
 
-        offsets = [(0,-1),(1,-1),(1,0),(0,1),(-1,1),(-1,0)] #neighbour offsets
-        colours = [Colour.RED,Colour.BLUE]
-
-        patterns = []
-        pattern1 = ["A","A","C1","C1","C1","C1"] #A is any for irrelevant tile, C1,C2 are colours
-        patterns.append(pattern1)
-        pattern2 = ["A","C1","C1","A","C2","C2"]
-        patterns.append(pattern2)
-        pattern3 = ["C1","C1","C1","A","C2","A"]
-        patterns.append(pattern3)
-
-        for pattern in patterns:
-            for colour in colours:
+        for pattern in self.patterns:
+            for colour in self.colours:
                 for i in range(6): #try all 6 rotations of pattern
                     rotated = pattern[i:] + pattern[:i]
                     count = 0
                     for j in range(6): #match each pattern entry to relevant neighbour tile
                         #check out of bounds and assign correct colour
-                        if move._x+offsets[j][0] < 0 or move._x+offsets[j][0] > len(board[0])-1:
+                        if move._x+self.offsets[j][0] < 0 or move._x+self.offsets[j][0] > len(board[0])-1:
                             tile = Colour.BLUE
-                        elif move._y+offsets[j][1] < 0 or move._y+offsets[j][1] > len(board[0])-1:
+                        elif move._y+self.offsets[j][1] < 0 or move._y+self.offsets[j][1] > len(board[0])-1:
                             tile = Colour.RED
                         else:
-                            tile = board[move._x+offsets[j][0]][move._y+offsets[j][1]]._colour
+                            tile = board[move._x+self.offsets[j][0]][move._y+self.offsets[j][1]]._colour
                         
                         #check if neighbour tile is correct colour to match the pattern
                         if rotated[j] == "A":
