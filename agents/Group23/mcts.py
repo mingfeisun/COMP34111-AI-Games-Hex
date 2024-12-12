@@ -1,6 +1,7 @@
 from copy import deepcopy
 import random
 import time
+import os
 
 from src.Board import Board
 from src.Colour import Colour
@@ -41,7 +42,11 @@ class MCTS:
 
         iterations = 0
         start_time = time.time()
-        number_of_workers = 8
+        number_of_workers = os.cpu_count()
+
+        if number_of_workers is None:
+            number_of_workers = 8
+
         # result = self._simulate(node.board, self.colour)
         with Pool(number_of_workers) as p:
             results = p.starmap(self.run_simulation_with_process, [(root, self.colour, start_time)] * number_of_workers)
