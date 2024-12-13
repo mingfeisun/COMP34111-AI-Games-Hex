@@ -10,12 +10,17 @@ from multiprocessing import Pool
 
 from agents.Group23.treenode import TreeNode
 
+class RolloutPolicy:
+    DEFAULT_POLICY = "default_policy"
+    BRIDGE_ROLLOUT_POLICY = "bridge_rollout_policy"
+
 class MCTS:
     """Implements the Monte Carlo Tree Search algorithm."""
 
     def __init__(self, colour: Colour, max_simulation_length: float = 2.5, custom_trained_network=None):
         self.colour = colour  # Agent's colour
         self.max_simulation_length = max_simulation_length  # Length of a MCTS search in seconds
+        self.rollout_policy = RolloutPolicy.BRIDGE_ROLLOUT_POLICY
 
     def run_simulation_with_process(self, root: TreeNode, colour: Colour,start_time: float) -> int:
         """Runs a simulation with a new process."""
@@ -95,9 +100,12 @@ class MCTS:
         # Play randomly until the game ends
         while (not board.has_ended(colour=colour) and
                not board.has_ended(colour=colour.opposite())):
+            # Move based on rollout policy
             moves = self.get_all_moves(board)
-
-            move = self._default_policy(moves)
+            if self.rollout_policy == RolloutPolicy.DEFAULT_POLICY:
+                move = self._default_policy(moves)
+            elif self.rollout_policy == RolloutPolicy.BRIDGE_ROLLOUT_POLICY:
+                move = self._bridge_policy(board, colour, moves)
 
             # use tuple of coordinates for speed
             x, y = move.x, move.y
@@ -151,6 +159,50 @@ class MCTS:
         """
         if len(moves) == 0:
             raise ValueError("No legal moves available")
+        return random.choice(moves)
+    
+    def _bridge_policy(self, board: Board, colour, moves: list[Move]) -> Move:
+        """
+        Implements the bridge rollout pattern to select a simulation move.
+
+        If the opponent's move probes any of the player's bridges, then the player always responds by making a bridge connection.
+        Otherwise, a random move is returned.
+        Resource: https://webdocs.cs.ualberta.ca/~hayward/papers/mcts-hex.pdf (IV C.) 
+        """
+        if len(moves) == 0:
+            raise ValueError("No legal moves available.")
+        
+        # Search for bridge-connect patterns
+        oppositeColour = Colour.opposite(colour)
+
+        for i in range(board.size):
+            for j in range(board.size):
+                if board.tiles[i][j].colour == colour:
+                        # top to bottom bridges
+                        if i - 1 >= 0 and j + 2 < board.size and board.tiles[i-1][j+2].colour == colour:
+                            # check to see if intermediate cells are taken by opponent
+                            if board.tiles[i-1][j+1].colour == oppositeColour and board.tiles[i][j+1].colour == None:
+                                return Move(i, j+1)     # we take the empty cell
+                            elif board.tiles[i][j+1].colour == oppositeColour and board.tiles[i-1][j+1].colour == None:
+                                return Move(i-1, j+1)
+
+                        # top-right to bottom-left bridges
+                        if i - 2 >= 0 and j + 1 < board.size and board.tiles[i-2][j+1].colour == colour:
+                            # check to see if intermediate cells are taken by opponent
+                            if board.tiles[i-1][j].colour == oppositeColour and board.tiles[i-1][j+1].colour == None:
+                                return Move(i-1, j+1)
+                            elif board.tiles[i-1][j+1].colour == oppositeColour and board.tiles[i-1][j].colour == None:
+                                return Move(i-1, j)
+                        
+                        # top-left to bottom-right bridges
+                        if i + 1 < board.size and j + 1 < board.size and board.tiles[i+1][j+1].colour == colour:
+                            # check to see if intermediate cells are taken by opponent
+                            if board.tiles[i+1][j].colour == oppositeColour and board.tiles[i][j+1].colour == None:
+                                return Move(i, j+1)
+                            elif board.tiles[i][j+1].colour == oppositeColour and board.tiles[i+1][j].colour == None:
+                                return Move(i+1, j)
+
+        # Return a random move when no bridge-connect pattern is found
         return random.choice(moves)
     
     def _removeInferiorCells(self, moves, board):
