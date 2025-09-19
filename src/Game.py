@@ -13,11 +13,24 @@ from src.Move import Move
 from src.Player import Player
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(format="[%(levelname)s]-%(asctime)s - %(message)s", level=logging.INFO)
+logging.basicConfig(
+    format="[%(levelname)s]-%(asctime)s - %(message)s", level=logging.INFO
+)
 
 
-def format_result(*, player1_name, player2_name, winner, win_method, player_1_move_time, player_2_move_time,
-                  player_1_turn, player_2_turn, total_turns, total_time) -> dict[str, str]:
+def format_result(
+    *,
+    player1_name,
+    player2_name,
+    winner,
+    win_method,
+    player_1_move_time,
+    player_2_move_time,
+    player_1_turn,
+    player_2_turn,
+    total_turns,
+    total_time,
+) -> dict[str, str]:
     return {
         "player1": player1_name,
         "player2": player2_name,
@@ -37,7 +50,7 @@ class Game:
 
     # the maximum time allocated for a match per player
     # 5 minutes in nanoseconds (min * s/min * ns/s)
-    MAXIMUM_TIME = 5 * 60 * 10**9
+    MAXIMUM_TIME = 3 * 60 * 10**9
     # 1 second in nanoseconds
     # MAXIMUM_TIME = 10**9
 
@@ -128,7 +141,7 @@ class Game:
 
             boardCopy = copy.deepcopy(self.board)
             turnCopy = self.turn
-            # playerCopy = copy.deepcopy(self.players)
+            playerCopy = copy.deepcopy(self.players)
 
             playerBoard = copy.deepcopy(self.board)
 
@@ -138,11 +151,15 @@ class Game:
 
             assert boardCopy == self.board, "Board was modified, Possible cheating!"
             assert turnCopy == self.turn, "Turn was modified, Possible cheating!"
-            # assert playerCopy == self.players, "Players were modified, Possible cheating!"
+            assert (
+                playerCopy == self.players
+            ), "Players were modified, Possible cheating!"
             assert end > start, "Move time is negative, Possible cheating!"
 
             currentPlayer.move_time += end - start
-            logger.debug(f"Player {currentPlayer.name}; Move time: {currentPlayer.move_time}ns")
+            logger.debug(
+                f"Player {currentPlayer.name}; Move time: {currentPlayer.move_time}ns"
+            )
             logger.info(f"Player {currentPlayer.name}; Move: {self.current_player}{m}")
             if currentPlayer.move_time > Game.MAXIMUM_TIME:
                 logger.info(f"Player {currentPlayer.name} timed out")
@@ -175,8 +192,12 @@ class Game:
             self.players[Colour.RED].agent.colour = Colour.RED
             self.players[Colour.BLUE].agent.colour = Colour.BLUE
             logger.debug("This is a swap move.")
-            logger.debug(f"{self.players[Colour.RED].name} colour:{self.players[Colour.RED].agent.colour.name}")
-            logger.debug(f"{self.players[Colour.BLUE].name}, colour:{self.players[Colour.BLUE].agent.colour.name}")
+            logger.debug(
+                f"{self.players[Colour.RED].name} colour:{self.players[Colour.RED].agent.colour.name}"
+            )
+            logger.debug(
+                f"{self.players[Colour.BLUE].name}, colour:{self.players[Colour.BLUE].agent.colour.name}"
+            )
 
             self.current_player = Colour.opposite(self.current_player)
             self.has_swapped = True
@@ -209,15 +230,23 @@ class Game:
                 winner = self.players[self.current_player].name
             case EndState.BAD_MOVE:
                 # the player printed is the winner
-                logger.info(f"Player {self.players[self.current_player].name} made an illegal move")
-                logger.info(f"Player {self.players[self.current_player.opposite()].name} has won")
+                logger.info(
+                    f"Player {self.players[self.current_player].name} made an illegal move"
+                )
+                logger.info(
+                    f"Player {self.players[self.current_player.opposite()].name} has won"
+                )
                 winner = self.players[self.current_player.opposite()].name
 
             case EndState.TIMEOUT:
                 # the player printed is the winner
                 # last move overcounts
-                logger.info(f"Player {self.players[self.current_player].name} has timed out")
-                logger.info(f"Player {self.players[self.current_player.opposite()].name} has won")
+                logger.info(
+                    f"Player {self.players[self.current_player].name} has timed out"
+                )
+                logger.info(
+                    f"Player {self.players[self.current_player.opposite()].name} has won"
+                )
                 winner = self.players[self.current_player.opposite()].name
             case _:
                 logger.error("Game ended abnormally")
@@ -238,7 +267,7 @@ class Game:
             player_1_turn=self.player1.turn,
             player_2_turn=self.player2.turn,
             total_turns=self._turn,
-            total_time=Game.ns_to_s(total_time)
+            total_time=Game.ns_to_s(total_time),
         )
 
     def is_valid_move(self, move: Move, turn: int, board: Board) -> bool:

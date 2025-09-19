@@ -1,24 +1,27 @@
 # COMP34120 AI and Games Coursework
 
-[**Important**] **Submission checklist and General information can be found in [Hex game doc.pdf](./Hex%20game%20doc.pdf)**
-
-
 We will be running each within this specific Dockerfile image and with this specific Docker environment. So make sure
 your agent will work within this container environment and under the constrain.
 
-To build Dockerfile
+Inside the Dockerfile, two versions of PyTorch and Tensorflow are available. Select the one you need based on the availability and use of the GPU.
+
+To build Dockerfile.
+
 ```bash
 docker build --build-arg UID=$UID -t hex .
 ```
-The building process will take a while. 
 
+The building process will take a while.
 
 To run the container use:
+
 ```bash
-docker run --cpus=8 --memory=8G -v `pwd`:/home/hex --name hex -it hex /bin/bash
+docker run --cpus=8 --memory=8G -v `pwd`:/home/hex --name hex --rm -it hex /bin/bash
 ```
 
-The current repo will be mapped to `/home/hex` within the container. 
+If you need GPU access, pass `--runtime=nvidia` to the docker run command.
+
+The current repo will be mapped to `/home/hex` within the container.
 If you `cd hex` you should be able to see all your
 local file. Any changes made to that directory will reflect to your system directory. This will be the command we use
 to create the running environment for playing each game, so your agent can at most you 8 CPUs and uses 8 GB of memory.
@@ -46,8 +49,8 @@ To run the test suite, you can use:
 python3 -m unittest discover
 ```
 
-### Misc
+To use a GPU, use **CUDA 12.3.0** with the preinstalled **TensorFlow 2.19.0** and **PyTorch 2.5.1+cu121**, or ensure any other versions you install are compatible with them.
 
-Scan the following QR code to open this repo on your device: 
+## Misc
 
-![QR Code](qrcode_github.com.png "QR Code")
+PDF doc link: [typst](https://typst.app/project/wimHW-RlEYIYkqEVJWgrXC)
