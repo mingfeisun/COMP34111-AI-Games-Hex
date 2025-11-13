@@ -16,7 +16,7 @@ The building process will take a while.
 To run the container use:
 
 ```bash
-docker run --cpus=8 --memory=8G -v `pwd`:/home/hex --name hex --rm -it hex /bin/bash
+docker run --cpus=8 --memory=8G -v "$(pwd)":/home/hex --name hex --rm -it hex /bin/bash
 ```
 
 If you need GPU access, pass `--runtime=nvidia` to the docker run command.
