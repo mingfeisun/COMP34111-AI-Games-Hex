@@ -10,8 +10,11 @@ class Move:
     _x: int = -1
     _y: int = -1
 
+    def is_swap(self) -> bool:
+        return self._x == -1 and self._y == -1
+
     def __str__(self) -> str:
-        if self._x == -1 and self._y == -1:
+        if self.is_swap():
             return "SWAP()"
         else:
             return f"(x={self._x}, y={self._y})"

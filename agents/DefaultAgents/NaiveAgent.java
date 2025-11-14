@@ -41,6 +41,11 @@ class NaiveAgent{
     }
 
     private boolean interpretMessage(String s){
+        if (s == null) {
+            // assume game over
+            return false;
+        }
+
         turn++;
 
         String[] msg = s.strip().split(";");
@@ -59,6 +64,8 @@ class NaiveAgent{
             case "SWAP":
                 colour = opp(colour);
                 makeMove(board);
+                break;
+
             default:
                 return false;
         }
