@@ -11,7 +11,6 @@ RUN ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata
 
 RUN apt-get update && apt-get install -y software-properties-common && \
-    add-apt-repository ppa:deadsnakes/ppa && \
     apt-get update && \
     apt-get install -y \
     python3.11 \
@@ -35,11 +34,9 @@ RUN curl https://bootstrap.pypa.io/get-pip.py | python3.11
 RUN python3.11 -m pip install --upgrade pip setuptools wheel
 
 ####### Use if you have GPU and want CUDA support#######
-# RUN python3.11 -m pip install tensorflow[and-cuda]==2.19.0
 # RUN python3.11 -m pip install --timeout=1000 torch==2.5.1+cu121 torchvision==0.20.1+cu121 torchaudio==2.5.1+cu121 --index-url https://download.pytorch.org/whl/cu121
 
 ####### Use if you do not need CUDA support#######
-RUN python3.11 -m pip install tensorflow==2.19.0
 RUN python3.11 -m pip install --timeout=1000 torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
 
 RUN python3.11 -m pip install numpy==2.1.3 pandas==2.3.1 scikit-learn

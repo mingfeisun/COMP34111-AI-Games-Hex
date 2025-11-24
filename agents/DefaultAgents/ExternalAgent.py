@@ -4,17 +4,31 @@ from src.AgentBase import AgentBase
 from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
+from copy import deepcopy
 
 
 class ExternalAgent(AgentBase):
-    """This class describes the default Hex agent. It will randomly send a
-    valid move at each turn, and it will choose to swap with a 50% chance.
-
+    """
     The class inherits from AgentBase, which is an abstract class.
     The AgentBase contains the colour property which you can use to get the agent's colour.
     You must implement the make_move method to make the agent functional.
     You CANNOT modify the AgentBase class, otherwise your agent might not function.
     """
+
+    def __deepcopy__(self, memo):
+        """
+        Excludes the subprocess from deepcopy
+        """
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        result.__dict__ = {
+            k: deepcopy(v, memo)
+            for k, v in self.__dict__.items()
+            if k != "agent_process"
+        }
+        result.agent_process = None
+        return result
 
     def __init__(self, colour: Colour):
         super().__init__(colour)
@@ -22,7 +36,14 @@ class ExternalAgent(AgentBase):
         # - "R" or "B" to tell the agent which colour it is
         # - 11, which is the size of the board
         self.agent_process = Popen(
-            ["java", "-cp", "agents/DefaultAgents", "NaiveAgent", colour.get_char(), "11"],
+            [
+                "java",
+                "-cp",
+                "agents/DefaultAgents",
+                "NaiveAgent",
+                colour.get_char(),
+                "11",
+            ],
             stdout=PIPE,
             stdin=PIPE,
             text=True,
@@ -44,7 +65,7 @@ class ExternalAgent(AgentBase):
             Move: The agent's move
         """
         # translate the python objects into string representations
-        rows = board.tiles()
+        rows = board.tiles
         board_strings = []
         for row in rows:
             row_string = ""
