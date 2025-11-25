@@ -5,6 +5,7 @@ from enum import Enum
 RESET = "\033[0m"
 RED_FG = "\033[31m"
 BLUE_FG = "\033[34m"
+GREEN_FG = "\033[32m"
 EMPTY_FG = "\033[90m"
 
 
@@ -59,6 +60,9 @@ class Colour(Enum):
     def blue(text: str) -> str:
         return f"{BLUE_FG}{text}{RESET}"
 
+    @staticmethod
+    def green(text: str) -> str:
+        return f"{GREEN_FG}{text}{RESET}"
 
 if __name__ == "__main__":
     for colour in Colour:
