@@ -118,16 +118,36 @@ class Board:
                     self.DFS_colour(x_n, y_n, colour)
 
     def print_board(self) -> str:
-        """Returns the string representation of a board."""
+        """Returns the coloured string representation of a board.
 
+        Red connects TOP-BOTTOM.
+        Blue connects LEFT-RIGHT.
+        """
+
+        size = len(self._tiles)
         output = ""
+
+        # Top red edge (column indices in red)
+        output += "  " + \
+            "".join(Colour.red(f"{i:2d}") for i in range(size)) + "\n"
+
         leading_spaces = ""
-        for line in self._tiles:
-            output += leading_spaces
-            leading_spaces += " "
+        for row_index, line in enumerate(self._tiles):
+            # Left blue edge (row index in blue)
+            output += " " + leading_spaces + Colour.blue(f"{row_index:2d}")
+
+            # Cells
             for tile in line:
                 output += Colour.get_char(tile.colour) + " "
-            output += "\n"
+
+            # Right blue edge (row index in blue)
+            output += Colour.blue(f"{row_index:2d}") + "\n"
+
+            leading_spaces += " "
+
+        # Bottom red edge
+        output += " " + leading_spaces + \
+            "".join(Colour.red(f"{i:2d}") for i in range(size)) + "\n"
 
         return output
 
