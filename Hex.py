@@ -21,7 +21,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-p1Name",
         "--player1Name",
-        default="Alice",
+        default="Red",
         type=str,
         help="Specify the player 1 name",
     )
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-p2Name",
         "--player2Name",
-        default="Bob",
+        default="Blue",
         type=str,
         help="Specify the player 2 name",
     )

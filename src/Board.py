@@ -20,6 +20,8 @@ class Board:
             self._tiles.append(new_line)
 
         self._winner = None
+        # store coordinates of winning path tiles
+        self._winning_path: set[tuple[int, int]] = set()
 
     def __str__(self) -> str:
         return self.print_board()
@@ -58,27 +60,43 @@ class Board:
         from top to bottom or a blue chain from left to right of the board.
         """
 
+        # reset winner and path before search
+        self._winner = None
+        self._winning_path.clear()
+
         # Red
-        # for all top tiles, check if they connect to bottom
         if colour == Colour.RED:
             for idx in range(self._size):
                 tile = self._tiles[0][idx]
-                if not tile.is_visited() and tile.colour == Colour.RED and self._winner is None:
+                if (
+                    not tile.is_visited()
+                    and tile.colour == Colour.RED
+                    and self._winner is None
+                ):
                     self.DFS_colour(0, idx, Colour.RED)
+
         # Blue
-        # for all left tiles, check if they connect to right
         elif colour == Colour.BLUE:
             for idx in range(self._size):
                 tile = self._tiles[idx][0]
-                if not tile.is_visited() and tile.colour == Colour.BLUE and self._winner is None:
+                if (
+                    not tile.is_visited()
+                    and tile.colour == Colour.BLUE
+                    and self._winner is None
+                ):
                     self.DFS_colour(idx, 0, Colour.BLUE)
         else:
             raise ValueError("Invalid colour")
 
-        # un-visit tiles
+        # un-visit tiles for later use
         self.clear_tiles()
 
-        return self._winner is not None
+        # if winner found, compute shortest path
+        if self._winner is not None:
+            self._compute_shortest_winning_path(colour)
+            return True
+
+        return False
 
     def clear_tiles(self):
         """Clears the visited status from all tiles."""
@@ -88,9 +106,7 @@ class Board:
                 tile.clear_visit()
 
     def DFS_colour(self, x, y, colour):
-        """A recursive DFS method that iterates through connected same-colour
-        tiles until it finds a bottom tile (Red) or a right tile (Blue).
-        """
+        """DFS just to detect a win, not to store the path."""
 
         self._tiles[x][y].visit()
 
@@ -112,22 +128,45 @@ class Board:
         for idx in range(Tile.NEIGHBOUR_COUNT):
             x_n = x + Tile.I_DISPLACEMENTS[idx]
             y_n = y + Tile.J_DISPLACEMENTS[idx]
-            if x_n >= 0 and x_n < self._size and y_n >= 0 and y_n < self._size:
+            if 0 <= x_n < self._size and 0 <= y_n < self._size:
                 neighbour = self._tiles[x_n][y_n]
                 if not neighbour.is_visited() and neighbour.colour == colour:
                     self.DFS_colour(x_n, y_n, colour)
 
     def print_board(self) -> str:
-        """Returns the string representation of a board."""
-
+        size = len(self._tiles)
         output = ""
+
+        # Top red edge (column indices in red)
+        output += "  " + "".join(Colour.red(f"{i:2d}")
+                                 for i in range(size)) + "\n"
+
         leading_spaces = ""
-        for line in self._tiles:
-            output += leading_spaces
+        for row_index, line in enumerate(self._tiles):
+            # Left blue edge (row index in blue)
+            output += " " + leading_spaces + Colour.blue(f"{row_index:2d}")
+
+            for col_index, tile in enumerate(line):
+                if (row_index, col_index) in self._winning_path:
+                    # raw symbol
+                    if tile.colour == Colour.RED:
+                        base = "R"
+                    elif tile.colour == Colour.BLUE:
+                        base = "B"
+                    else:
+                        base = "·"
+                    cell_char = Colour.green(base)
+                else:
+                    cell_char = Colour.get_char(tile.colour)
+
+                output += cell_char + " "
+
+            output += Colour.blue(f"{row_index:2d}") + "\n"
             leading_spaces += " "
-            for tile in line:
-                output += Colour.get_char(tile.colour) + " "
-            output += "\n"
+
+        output += " " + leading_spaces + "".join(
+            Colour.red(f"{i:2d}") for i in range(size)
+        ) + "\n"
 
         return output
 
@@ -144,6 +183,73 @@ class Board:
 
     def set_tile_colour(self, x, y, colour) -> None:
         self.tiles[x][y].colour = colour
+
+    def _compute_shortest_winning_path(self, colour: Colour):
+        """Use BFS to find a shortest connection between the two sides
+        for the winning colour and store it in _winning_path.
+        """
+
+        from collections import deque
+
+        size = self._size
+        visited: set[tuple[int, int]] = set()
+        parent: dict[tuple[int, int], tuple[int, int] | None] = {}
+        q: deque[tuple[int, int]] = deque()
+
+        # initialise BFS sources depending on colour
+        if colour == Colour.RED:
+            # top row sources
+            for y in range(size):
+                if self._tiles[0][y].colour == Colour.RED:
+                    q.append((0, y))
+                    visited.add((0, y))
+                    parent[(0, y)] = None
+        elif colour == Colour.BLUE:
+            # left column sources
+            for x in range(size):
+                if self._tiles[x][0].colour == Colour.BLUE:
+                    q.append((x, 0))
+                    visited.add((x, 0))
+                    parent[(x, 0)] = None
+        else:
+            return
+
+        target: tuple[int, int] | None = None
+
+        while q:
+            x, y = q.popleft()
+
+            # goal test
+            if colour == Colour.RED and x == size - 1:
+                target = (x, y)
+                break
+            if colour == Colour.BLUE and y == size - 1:
+                target = (x, y)
+                break
+
+            # explore neighbours
+            for idx in range(Tile.NEIGHBOUR_COUNT):
+                x_n = x + Tile.I_DISPLACEMENTS[idx]
+                y_n = y + Tile.J_DISPLACEMENTS[idx]
+                if 0 <= x_n < size and 0 <= y_n < size:
+                    if (x_n, y_n) not in visited and \
+                       self._tiles[x_n][y_n].colour == colour:
+                        visited.add((x_n, y_n))
+                        parent[(x_n, y_n)] = (x, y)
+                        q.append((x_n, y_n))
+
+        # reconstruct path if target reached
+        if target is not None:
+            path: list[tuple[int, int]] = []
+            cur: tuple[int, int] | None = target
+            while cur is not None:
+                path.append(cur)
+                cur = parent[cur]
+            path.reverse()
+            self._winning_path = set(path)
+        else:
+            # fallback: no path found; leave empty
+            self._winning_path.clear()
 
 
 if __name__ == "__main__":
