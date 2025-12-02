@@ -1,86 +1,117 @@
-from collections import defaultdict
+import copy
 import math
+import time
+from random import choice
+
+from agents.Group21.MCTSNode import MCTSNode
+from src.Board import Board
+from src.Colour import Colour
+from src.Move import Move
+
 
 class MCTS:
-    def __init__(self, exploration_weight=1):
-        self.Q = defaultdict(int)  # total reward of each node
-        self.N = defaultdict(int)  # total visit count for each node
-        self.children = dict()  # children of each node
+    def __init__(self, colour: Colour, exploration_weight: float = 1):
+        self.colour = colour
+        self.root: MCTSNode | None = None
         self.exploration_weight = exploration_weight
 
-    def choose(self, node):
-        "Choose the best successor of node. (Choose a move in the game)"
-        if node.is_terminal():
-            raise RuntimeError(f"choose called on terminal node {node}")
+    # TODO: Time limit or iterations?
+    # TODO: From first run we need at minimum 11^2 - 1 iterations before all moves can even be chosen
+    # Perhaps we can have iterations / time_limit decay as rounds go on?
+    # TODO: How do we pick child? Highest N or Q/N?
+    def run(self, time_limit: float = 0.5, iterations: int = 20) -> Move:
+        # end_time = time.time() + time_limit
+        # while time.time() < end_time:
+        for _ in range(iterations):
+            node = self._select()
 
-        if node not in self.children:
-            return node.find_random_child()
+            # Skip expansion if the node is already terminal
+            if not node.is_terminal:
+                node_to_expand = self._expand(node)
+                reward = self._simulate(node_to_expand)
+                self._backpropagate(node_to_expand, reward)
+            else:
+                reward = self._simulate(node)
+                self._backpropagate(node, reward)
 
-        def score(n):
-            if self.N[n] == 0:
-                return float("-inf")  # avoid unseen moves
-            return self.Q[n] / self.N[n]  # average reward
+        # Picking the child with the highest visit count
+        best_move, best_child = max(self.root.children.items(), key=lambda child: child[1].N)
+        print(f'Best move was {best_move} with Q={best_child.Q}, N={best_child.N}')
+        return best_move
 
-        return max(self.children[node], key=score)
-    
-    def do_rollout(self, node):
-        "Make the tree one layer better. (Train for one iteration.)"
-        path = self._select(node)
-        leaf = path[-1]
-        self._expand(leaf)
-        reward = self._simulate(leaf)
-        self._backpropagate(path, reward)
+    # TODO: Is there an instance where we won't be able to find the move?
+    # TODO: Should we prune the old states? Do we need to keep track?
+    def update(self, board: Board, opp_move: Move) -> None:
+        """Given a move, find the corresponding child of the root and set that as the new root"""
+        # In the first move, root does not exist yet, so we need to create
+        if self.root is None:
+            self.root = MCTSNode(self.colour, board)
+            return
 
-    def _select(self, node):
-        "Find an unexplored descendent of `node`"
-        path = []
-        while True:
-            path.append(node)
-            if node not in self.children or not self.children[node]:
-                # node is either unexplored or terminal
-                return path
-            unexplored = self.children[node] - self.children.keys()
-            if unexplored:
-                n = unexplored.pop()
-                path.append(n)
-                return path
-            node = self._uct_select(node)  # descend a layer deeper
+        # Check if we have a node for the opponent's move, in which case we can reuse
+        if opp_move in self.root.children:
+            self.root = self.root.children[opp_move]
+            self.root.parent = None
+        # Create a new node
+        else:
+            self.root = MCTSNode(self.colour, board)
 
-    def _expand(self, node):
-        "Update the `children` dict with the children of `node`"
-        if node in self.children:
-            return  # already expanded
-        self.children[node] = node.find_children()
+    def _select(self) -> MCTSNode:
+        """Find an unexplored descendent of the root node"""
+        node = self.root
+        while not node.is_terminal and node.is_fully_explored:
+            node = self._uct_select(node)
+        return node
 
-    def _simulate(self, node):
-        "Returns the reward for a random simulation (to completion) of `node`"
-        invert_reward = True
-        while True:
-            if node.is_terminal():
-                reward = node.reward()
-                return 1 - reward if invert_reward else reward
-            node = node.find_random_child()
-            invert_reward = not invert_reward
+    # TODO: Division by 0 for N = 0?
+    def _uct_select(self, node: MCTSNode) -> MCTSNode:
+        """Select a child of node, balancing exploration & exploitation"""
+        log_N_vertex = math.log(node.N)
 
-    def _backpropagate(self, path, reward):
-        "Send the reward back up to the ancestors of the leaf"
-        for node in reversed(path):
-            self.N[node] += 1
-            self.Q[node] += reward
-            reward = 1 - reward  # 1 for me is 0 for my enemy, and vice versa
+        def uct(n: MCTSNode) -> float:
+            """Returns the upper confidence bound for trees"""
+            return (n.Q / n.N) + self.exploration_weight * math.sqrt(log_N_vertex / n.N)
 
-    def _uct_select(self, node):
-        "Select a child of node, balancing exploration & exploitation"
+        return max(node.children.values(), key=uct)
 
-        # All children of node should already be expanded:
-        assert all(n in self.children for n in self.children[node])
+    # TODO: A heuristic to pick more promising areas first if MCTS takes too long
+    def _expand(self, node: MCTSNode) -> MCTSNode:
+        """Returns a randomly chosen node from the available moves"""
+        move_to_expand = choice(node.unexplored_moves)
+        return node.make_move(move_to_expand)
 
-        log_N_vertex = math.log(self.N[node])
+    # TODO: 0/1 for rewards or -1/+1?
+    # TODO: Possibly use a heuristic to allow for a reward even if node is non-terminal
+    # TODO: Heuristic for move instead of random?
+    # TODO: Parallelize
+    def _simulate(self, node: MCTSNode) -> float:
+        board = copy.deepcopy(node.board)
+        current_colour = node.colour
 
-        def uct(n):
-            "Upper confidence bound for trees"
-            return self.Q[n] / self.N[n] + self.exploration_weight * math.sqrt(
-                log_N_vertex / self.N[n]
-            )
+        # Checking that the board hasn't ended due to the previous colour's play
+        while not board.has_ended(Colour.opposite(current_colour)):
+            possible_moves = [
+                (i, j)
+                for i in range(board.size)
+                for j in range(board.size)
+                if not board.tiles[i][j].colour
+            ]
 
-        return max(self.children[node], key=uct)
+            x, y = choice(possible_moves)
+            board.set_tile_colour(x, y, current_colour)
+            current_colour = Colour.opposite(current_colour)
+
+        # Get reward
+        return 1 if board.get_winner() == self.root.colour else -1
+
+    @staticmethod
+    def _backpropagate(node: MCTSNode, reward: float):
+        """Backpropagates rewards and visits until the root node is reached"""
+        current_node = node
+        current_reward = reward
+        while current_node is not None:
+            current_node.Q += current_reward
+            current_node.N += 1
+
+            current_node = current_node.parent
+            current_reward = -current_reward # Flip reward as 0-sum

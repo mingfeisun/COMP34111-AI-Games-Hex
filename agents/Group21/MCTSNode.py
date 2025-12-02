@@ -1,103 +1,55 @@
+import copy
+
+from src.Move import Move
 from .Node import Node
 from src.Board import Board
 from src.Colour import Colour
-from random import choice
+from random import choice, random
 
-class MCTSNode(Node):
+
+class MCTSNode():
     def __init__(
         self, 
         colour: Colour,
-        board: Board = None,
+        board: Board,
+        parent: "MCTSNode | None" = None
     ):
         self.board = board
         self.colour = colour
 
-    def get_board(self) -> Board:
-        return getattr(self, "board", None)
-    
-    def get_player(self) -> Colour:
-        return getattr(self, "colour", None)
+        self.parent = parent
+        self.children: dict[Move, MCTSNode] = {} # Key is move, value is a Node
+        self.Q = 0 # Total reward
+        self.N = 0 # Total number of visits
 
-    def find_children(self):
-        "All possible successors of this board state"
-        board = self.get_board()
+        # Compute the list of legal moves once in the constructor so we don't have to do this again
+        # TODO: What about swap (i.e. Move(-1, -1)?
+        self._possible_moves = [
+            Move(i, j)
+            for i in range(self.board.size)
+            for j in range(self.board.size)
+            if not self.board.tiles[i][j].colour
+        ]
 
-        if board is None:
-            return set()
+    @property
+    def is_terminal(self) -> bool:
+        """Returns True if the game has ended"""
+        return self.board.has_ended(Colour.opposite(self.colour))
 
-        children = set()
-        try:
-            size = board.size
-            tiles = board.tiles
-        except Exception:
-            return set()
+    @property
+    def is_fully_explored(self) -> bool:
+        """Returns True if this all children of this node have been explored at least once"""
+        return len(self.children) == len(self._possible_moves)
 
-        for i in range(size):
-            for j in range(size):
-                try:
-                    if tiles[i][j].colour == None:
-                        children.add((i, j))
-                except Exception:
-                    continue
-        return children
-    
-    def find_random_child(self):
-        "Random successor of this board state (for more efficient simulation)"
-        board = self.get_board()
-        if board is None:
-            return None
-        
-        try:
-            size = board.size
-            tiles = board.tiles
-        except Exception:
-            return None
+    @property
+    def unexplored_moves(self) -> list[Move]:
+        """Returns a list of unexplored moves (i.e those that don't have a node yet)"""
+        return [move for move in self._possible_moves if move not in self.children]
 
-        empty_tiles = []
-        for i in range(size):
-            for j in range(size):
-                try:
-                    if tiles[i][j].colour == None:
-                        empty_tiles.append((i, j))
-                except Exception:
-                    continue
-
-        if not empty_tiles:
-            return None
-
-        return choice(empty_tiles)
-    
-    def is_terminal(self):
-        "Returns True if the node has no children"
-        return True
-    
-    def reward(self):
-        "Assumes `self` is terminal node. 1=win, 0=loss"
-        board = self.get_board()
-
-        if board is None:
-            return 0
-        
-        try:
-            winner = board.get_winner()
-        except Exception:
-            winner = getattr(board, "_winner", None)
-
-        # if no winner, not a terminal win for anyone
-        if winner is None:
-            return 0
-        
-        player = self.get_player()
-
-        if player is None:
-            return 0
-        
-        return 1 if winner == player else 0
-    
-    def __hash__(self):
-        "Nodes must be hashable"
-        return 123456789
-    
-    def __eq__(node1, node2):
-        "Nodes must be comparable"
-        return True
+    def make_move(self, move: Move) -> "MCTSNode":
+        """Create the node for this move and store in children"""
+        board_copy = copy.deepcopy(self.board) # Next state
+        board_copy.set_tile_colour(move.x, move.y, self.colour)
+        child = MCTSNode(Colour.opposite(self.colour), board_copy, self)
+        self.children[move] = child
+        return child
