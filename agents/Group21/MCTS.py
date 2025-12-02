@@ -39,11 +39,11 @@ class MCTS:
         print(f'Best move was {best_move} with Q={best_child.Q}, N={best_child.N}')
         return best_move
 
-    # TODO: Is there an instance where we won't be able to find the move?
     # TODO: Should we prune the old states? Do we need to keep track?
-    def update(self, board: Board, opp_move: Move) -> None:
+    def update(self, board: Board, opp_move: Move | None) -> None:
         """Given a move, find the corresponding child of the root and set that as the new root"""
-        # In the first move, root does not exist yet, so we need to create
+
+        # Initial set up
         if self.root is None:
             self.root = MCTSNode(self.colour, board)
             return
@@ -52,7 +52,9 @@ class MCTS:
         if opp_move in self.root.children:
             self.root = self.root.children[opp_move]
             self.root.parent = None
-        # Create a new node
+            return
+
+        # Otherwise, create a new node
         else:
             self.root = MCTSNode(self.colour, board)
 
