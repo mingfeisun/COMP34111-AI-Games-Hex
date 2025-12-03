@@ -36,7 +36,7 @@ def run_games(num_games, player1, player1Name, player2, player2Name):
         output = result.stdout + result.stderr
         winner = extract_winner(output)
 
-        if winner == player1:
+        if winner == player1Name:
             wins += 1
 
         total += 1
@@ -58,5 +58,5 @@ if __name__ == "__main__":
 
     print("\n=== RESULTS ===")
     print(f"Total Games: {total}")
-    print(f"Wins for {args.player}: {wins}")
+    print(f"Wins for {args.player1}: {wins}")
     print(f"Win Rate: {wins/total*100:.2f}%")
