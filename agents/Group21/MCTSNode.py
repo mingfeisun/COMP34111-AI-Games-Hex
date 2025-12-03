@@ -1,7 +1,6 @@
 import copy
 
 from src.Move import Move
-from .Node import Node
 from src.Board import Board
 from src.Colour import Colour
 from random import choice, random
