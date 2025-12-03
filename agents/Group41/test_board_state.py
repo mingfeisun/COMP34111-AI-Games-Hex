@@ -96,9 +96,24 @@ def test_get_neighbours():
     print (n2)
     print("get_neighbours test passed!")
 
+
+def test_check_win():
+    b = Board(3)
+    w = BoardStateNP(b)
+
+    # Red makes a vertical path
+    w.array[:] = 0
+    w.array[0,1] = 1
+    w.array[1,1] = 1
+    w.array[2,1] = 1
+
+    assert w.check_win() == Colour.RED
+    print("check_win test passed!")
+
 # test_numpy_conversion()
 # test_is_legal()
 # test_apply_move()
 # test_clone()
 # test_get_numpy()
-test_get_neighbours()
+# test_get_neighbours()
+test_check_win()

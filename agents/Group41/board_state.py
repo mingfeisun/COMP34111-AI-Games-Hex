@@ -10,6 +10,7 @@ import numpy as np
 from src.Board import Board
 from src.Move import Move
 from src.Colour import Colour
+from agents.Group41.dsu import DSU
 
 
 class BoardStateNP:
@@ -91,3 +92,61 @@ class BoardStateNP:
         ]
 
         return valid
+
+
+    def check_win(self):
+        N = self.size
+        board = self.array
+
+        # TOTAL DSU size
+        # N*N tiles + 4 virtual nodes
+        TOTAL = N * N + 4
+
+        RED_TOP = N * N
+        RED_BOTTOM = N * N + 1
+        BLUE_LEFT = N * N + 2
+        BLUE_RIGHT = N * N + 3
+
+        dsu = DSU(TOTAL)
+
+        # Helper: convert (x, y) to DSU index
+        def idx(x, y):
+            return x * N + y
+
+        for x in range(N):
+            for y in range(N):
+                cell = board[x, y]
+
+                if cell == 1:        # RED
+                    # Connect to RED edges
+                    if x == 0:
+                        dsu.union(idx(x, y), RED_TOP)
+                    if x == N - 1:
+                        dsu.union(idx(x, y), RED_BOTTOM)
+
+                    # Connect to red neighbours
+                    for nx, ny in self.get_neighbours(x, y):
+                        if board[nx, ny] == 1:
+                            dsu.union(idx(x, y), idx(nx, ny))
+
+                elif cell == 2:      # BLUE
+                    # Connect to BLUE edges
+                    if y == 0:
+                        dsu.union(idx(x, y), BLUE_LEFT)
+                    if y == N - 1:
+                        dsu.union(idx(x, y), BLUE_RIGHT)
+
+                    # Connect to blue neighbours
+                    for nx, ny in self.get_neighbours(x, y):
+                        if board[nx, ny] == 2:
+                            dsu.union(idx(x, y), idx(nx, ny))
+
+        # Check RED win
+        if dsu.find(RED_TOP) == dsu.find(RED_BOTTOM):
+            return Colour.RED
+
+        # Check BLUE win
+        if dsu.find(BLUE_LEFT) == dsu.find(BLUE_RIGHT):
+            return Colour.BLUE
+
+        return None
