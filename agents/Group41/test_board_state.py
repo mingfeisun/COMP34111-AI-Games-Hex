@@ -12,7 +12,7 @@ from src.Colour import Colour
 from agents.Group41.board_state import BoardStateNP
 
 def test_numpy_conversion():
-    b = Board(3)
+    b = Board(11)
     b.set_tile_colour(0, 1, Colour.RED)
     b.set_tile_colour(2, 2, Colour.BLUE)
 
@@ -78,8 +78,27 @@ def test_get_numpy():
     print("get_numpy tests passed!")
 
 
-test_numpy_conversion()
-test_is_legal()
-test_apply_move()
-test_clone()
-test_get_numpy()
+
+def test_get_neighbours():
+    b = Board(3)
+    w = BoardStateNP(b)
+
+    # Middle tile (1,1) should have 6 neighbours in a 3×3
+    n = set(w.get_neighbours(1,1))
+    expected = {(0,1),(2,1),(1,0),(1,2),(0,2),(2,0)}
+    assert n == expected
+    print (n)
+    # Corner tile (0,0) should have only 2 neighbours
+    n2 = set(w.get_neighbours(0,0))
+    expected2 = {(1,0),(0,1)}
+    assert n2 == expected2
+
+    print (n2)
+    print("get_neighbours test passed!")
+
+# test_numpy_conversion()
+# test_is_legal()
+# test_apply_move()
+# test_clone()
+# test_get_numpy()
+test_get_neighbours()

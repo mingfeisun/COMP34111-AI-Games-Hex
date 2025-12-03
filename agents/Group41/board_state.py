@@ -23,7 +23,7 @@ class BoardStateNP:
         self.array = self._convert(board)
 
     def _convert(self, board):
-        
+
         tiles = board.tiles
         arr = np.zeros((self.size, self.size), dtype=np.int8)
 
@@ -61,3 +61,33 @@ class BoardStateNP:
             self.array[x, y] = 1
         elif colour == Colour.BLUE:
             self.array[x, y] = 2
+    
+    def get_neighbours(self, x, y):
+        """
+        Returns a list of valid neighbouring coordinates for Hex.
+        Hex neighbours (6 directions):
+            (x-1, y)
+            (x+1, y)
+            (x,   y-1)
+            (x,   y+1)
+            (x-1, y+1)
+            (x+1, y-1)
+        """
+
+        candidates = [
+            (x - 1, y),     # left
+            (x + 1, y),     # right
+            (x,     y - 1), # up
+            (x,     y + 1), # down
+            (x - 1, y + 1), # diag DL
+            (x + 1, y - 1), # diag UR
+        ]
+
+        # Keep only inside-board coordinates
+        valid = [
+            (nx, ny)
+            for (nx, ny) in candidates
+            if 0 <= nx < self.size and 0 <= ny < self.size
+        ]
+
+        return valid
