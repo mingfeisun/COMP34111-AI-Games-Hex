@@ -42,7 +42,6 @@ class MCTSNode():
 
     def unexplored_moves(self, can_swap: bool) -> list[Move]:
         """Returns a list of unexplored moves (i.e those that don't have a node yet)"""
-        # return [move for move in self._possible_moves if move not in self.children]
         return (
             [Move(-1, -1)] + [
                 move for move in self._possible_moves
