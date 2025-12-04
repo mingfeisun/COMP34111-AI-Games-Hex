@@ -15,24 +15,22 @@ class MCTS:
         self.root: MCTSNode | None = None
         self.exploration_weight = exploration_weight
 
-    # TODO: Time limit or iterations?
-    # TODO: From first run we need at minimum 11^2 - 1 iterations before all moves can even be chosen
-    # Perhaps we can have iterations / time_limit decay as rounds go on?
-    # TODO: How do we pick child? Highest N or Q/N?
-    def run(self, time_limit: float = 0.5, iterations: int = 20) -> Move:
-        # end_time = time.time() + time_limit
-        # while time.time() < end_time:
-        for _ in range(iterations):
-            node = self._select()
+    def run(self, time_limit: float = 0.5, iterations: int = 1000) -> Move:
+        assert self.root is not None, "Call update(board, opp_move) before run() to set root."
 
-            # Skip expansion if the node is already terminal
-            if not node.is_terminal:
-                node_to_expand = self._expand(node)
-                reward = self._simulate(node_to_expand)
-                self._backpropagate(node_to_expand, reward)
-            else:
-                reward = self._simulate(node)
-                self._backpropagate(node, reward)
+        end_time = time.time() + time_limit
+        iters_left = iterations
+
+        while iters_left > 0 and time.time() < end_time:
+            leaf = self._select()
+            child = self._expand(leaf) if not leaf.is_terminal else leaf
+            reward = self._simulate(child)
+            self._backpropagate(child, reward)
+            iters_left -= 1
+
+        if not self.root.children:
+            fallback_move = choice(self.root.unexplored_moves)
+            return fallback_move
 
         # Picking the child with the highest visit count
         best_move, best_child = max(self.root.children.items(), key=lambda child: child[1].N)
@@ -54,9 +52,7 @@ class MCTS:
             self.root.parent = None
             return
 
-        # Otherwise, create a new node
-        else:
-            self.root = MCTSNode(self.colour, board)
+        self.root = MCTSNode(self.colour, board)
 
     def _select(self) -> MCTSNode:
         """Find an unexplored descendent of the root node"""
@@ -68,44 +64,87 @@ class MCTS:
     # TODO: Division by 0 for N = 0?
     def _uct_select(self, node: MCTSNode) -> MCTSNode:
         """Select a child of node, balancing exploration & exploitation"""
-        log_N_vertex = math.log(node.N)
+        log_N_vertex = math.log(node.N + 1e-9)
 
         def uct(n: MCTSNode) -> float:
             """Returns the upper confidence bound for trees"""
-            return (n.Q / n.N) + self.exploration_weight * math.sqrt(log_N_vertex / n.N)
+            return (n.Q / (n.N + 1e-9)) + self.exploration_weight * math.sqrt(log_N_vertex / (n.N + 1e-9))
 
         return max(node.children.values(), key=uct)
 
-    # TODO: A heuristic to pick more promising areas first if MCTS takes too long
     def _expand(self, node: MCTSNode) -> MCTSNode:
-        """Returns a randomly chosen node from the available moves"""
-        move_to_expand = choice(node.unexplored_moves)
-        return node.make_move(move_to_expand)
+        scored = [
+            (self._move_heuristic(node.board, mv), mv)
+            for mv in node.unexplored_moves
+        ]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        _, best_move = scored[0]
+        return node.make_move(best_move)
+    
+    def _move_heuristic(self, board: Board, move) -> float:
+        if hasattr(move, "x") and hasattr(move, "y"):
+            x, y = move.x, move.y
+        else:
+            x, y = move
 
-    # TODO: 0/1 for rewards or -1/+1?
-    # TODO: Possibly use a heuristic to allow for a reward even if node is non-terminal
-    # TODO: Heuristic for move instead of random?
-    # TODO: Parallelize
+        n = board.size
+
+        # Compute distance to the target winning side
+        if self.colour == Colour.RED:
+            dist = min(y, n-1-y)
+        else:
+            dist = min(x, n-1-x)
+
+        # Computes center preference (the more center the better)
+        cx = abs(x - n/2)
+        cy = abs(y - n/2)
+        center_score = - (cx + cy)
+
+        return -dist + 0.3 * center_score
+
     def _simulate(self, node: MCTSNode) -> float:
         board = copy.deepcopy(node.board)
         current_colour = node.colour
 
         # Checking that the board hasn't ended due to the previous colour's play
         while not board.has_ended(Colour.opposite(current_colour)):
-            possible_moves = [
-                (i, j)
-                for i in range(board.size)
-                for j in range(board.size)
-                if not board.tiles[i][j].colour
-            ]
-
-            x, y = choice(possible_moves)
-            board.set_tile_colour(x, y, current_colour)
+            moves = self._biased_simulation_moves(board, current_colour)
+            move = choice(moves)
+            board.set_tile_colour(move[0], move[1], current_colour)
             current_colour = Colour.opposite(current_colour)
 
-        # Get reward
         return 1 if board.get_winner() == self.root.colour else -1
+    
+    def _biased_simulation_moves(self, board: Board, colour: Colour):
+        # List of legal moves
+        empty = [
+            (i, j)
+            for i in range(board.size)
+            for j in range(board.size)
+            if not board.tiles[i][j].colour
+        ]
 
+        # Prefer moves adjacent to existing own color
+        good = []
+        for x, y in empty:
+            for dx, dy in [(1,0),(-1,0),(0,1),(0,-1),(1,-1),(-1,1)]:
+                nx, ny = x+dx, y+dy
+                if 0 <= nx < board.size and 0 <= ny < board.size:
+                    if board.tiles[nx][ny].colour == colour:
+                        good.append((x, y))
+                        break
+
+        if good:
+            return good
+
+        # If no adjacent moves exist, use heuristic scoring
+        scored = [(self._move_heuristic(board, (x, y)), (x, y)) for (x, y) in empty]
+        scored.sort(reverse=True)
+
+        # Keep only the best move at the top
+        top = [mv for _, mv in scored[:max(4, len(scored)//5)]]
+        return top
+    
     @staticmethod
     def _backpropagate(node: MCTSNode, reward: float):
         """Backpropagates rewards and visits until the root node is reached"""
