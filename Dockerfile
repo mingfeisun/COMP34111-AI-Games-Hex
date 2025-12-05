@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y software-properties-common && \
     git \
     curl \
     wget \
+    g++\
     default-jre && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
