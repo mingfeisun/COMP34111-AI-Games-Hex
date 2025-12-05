@@ -13,6 +13,7 @@ class MCTS:
     def __init__(self, colour: Colour, exploration_weight: float = 1):
         self.colour = colour
         self.root: MCTSNode | None = None
+        self.current_turn = 0
         self.exploration_weight = exploration_weight
 
     # TODO: Time limit or iterations?
@@ -79,7 +80,7 @@ class MCTS:
     # TODO: A heuristic to pick more promising areas first if MCTS takes too long
     def _expand(self, node: MCTSNode) -> MCTSNode:
         """Returns a randomly chosen node from the available moves"""
-        move_to_expand = choice(node.unexplored_moves)
+        move_to_expand = choice(node.unexplored_moves(self.current_turn == 2))
         return node.make_move(move_to_expand)
 
     # TODO: 0/1 for rewards or -1/+1?

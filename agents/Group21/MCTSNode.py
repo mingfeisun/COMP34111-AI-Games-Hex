@@ -40,10 +40,12 @@ class MCTSNode():
         """Returns True if this all children of this node have been explored at least once"""
         return len(self.children) == len(self._possible_moves)
 
-    @property
-    def unexplored_moves(self) -> list[Move]:
+    def unexplored_moves(self, can_swap: bool) -> list[Move]:
         """Returns a list of unexplored moves (i.e those that don't have a node yet)"""
-        return [move for move in self._possible_moves if move not in self.children]
+        possible_moves = [move for move in self._possible_moves]
+        if can_swap and Move(-1, -1) not in self.children:
+            possible_moves += [Move(-1, -1)]
+        return possible_moves
 
     def make_move(self, move: Move) -> "MCTSNode":
         """Create the node for this move and store in children"""
