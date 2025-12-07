@@ -13,6 +13,7 @@ class MCTSAlphaZeroAgent(AgentBase):
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         legal_moves, pi = self.mcts.run(board, simulations=self.simulations)
-        move_index = np.random.choice(len(legal_moves), p=pi)
+        # Select move_index with highest probability in pi distribution
+        move_index = np.argmax(pi)
         return legal_moves[move_index]
 
