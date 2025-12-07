@@ -15,7 +15,7 @@ class AlphaZeroMCTS:
         self.Vs = {}  # legal moves
 
     def run(self, game, simulations=800):
-        '''Runs X simulations starting from the current game state'''
+        '''Runs MCTS simulations starting from the current game state'''
         board = game.board
         player = game.current_player
 
