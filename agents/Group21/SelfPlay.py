@@ -28,6 +28,7 @@ class SelfPlay:
 
         while not game.board.has_ended(current_player_colour):
             current_agent = game.players[current_player_colour].agent
+            # get legal moves and improved policy from MCTS from current state 
             legal_moves, pi = current_agent.mcts.run(game, simulations=self.simulations)
 
             # store training sample but without z yet
@@ -36,7 +37,7 @@ class SelfPlay:
             players_to_move.append(current_player_colour)
 
             # Sample a move from the improved policy pi
-            move_index = np.random.choice(len(legal_moves), p=pi)
+            move_index = np.argmax(pi)
             move = legal_moves[move_index]
 
             game.current_player = current_player_colour
@@ -46,7 +47,7 @@ class SelfPlay:
         # game finished, determine winner
         winner = game.board.get_winner()
 
-        # Assign z for each move from the perspective of the player who made it
+        # Assign z for each move from the perspective of the player who made the move, e.g. if Blue to move and Blue wins, z=1
         for s, p, player in zip(states, policies, players_to_move):
             z = 1 if player == winner else -1
             examples.append((s, p, z))
@@ -57,6 +58,8 @@ class SelfPlay:
         size = board.size
         player_plane = []
         opponent_plane = []
+        # Red is player1, Blue is player2
+        player_to_move_plane = [1 if current_player == Colour.RED else 0] * (size * size)
 
         for i in range(size):
             for j in range(size):
@@ -70,4 +73,5 @@ class SelfPlay:
                     player_plane.append(0)
                     opponent_plane.append(0)
         
-        return player_plane + opponent_plane
+        # Return a 3D numpy array with shape (3, size, size)
+        return [np.array(player_plane), np.array(opponent_plane), np.array(player_to_move_plane)]

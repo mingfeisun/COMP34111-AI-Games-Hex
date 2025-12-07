@@ -15,6 +15,7 @@ class AlphaZeroMCTS:
         self.Vs = {}  # legal moves
 
     def run(self, game, simulations=800):
+        '''Runs X simulations starting from the current game state'''
         board = game.board
         player = game.current_player
 
@@ -28,7 +29,7 @@ class AlphaZeroMCTS:
         pi = np.array(counts) / sum(counts) if sum(counts) > 0 else np.ones(len(counts)) / len(counts)
         return self.Vs[s], pi
 
-    # Do one simulation
+    # Do one simulation given a state in game
     def search(self, board, player):
         s = self._board_to_string(board)
 
