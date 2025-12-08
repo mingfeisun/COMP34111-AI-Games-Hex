@@ -56,7 +56,7 @@ def run_games(num_games, player1, player1Name, player2, player2Name):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", "--num_games", type=int, default=10)
-    parser.add_argument("-p1", "--player1", type=str, default="agents.Group21.MCTSAgent MCTSAgent")
+    parser.add_argument("-p1", "--player1", type=str, default="agents.Group21.MCTSAlphaZeroAgent MCTSAlphaZeroAgent")
     parser.add_argument("-p1Name", "--player1Name", type=str, default="My Agent")
     parser.add_argument("-p2", "--player2", type=str, default="agents.Group21.RandomAgent RandomAgent")
     parser.add_argument("-p2Name", "--player2Name", type=str, default="Random Agent")
