@@ -32,6 +32,19 @@ class DummyModel(nn.Module):
 
         return policy_probs, value
 
+    def predict(self, state):
+        """
+        state shape: (3, 11, 11)
+        Returns:
+            policy_probs: (121,) numpy array
+            value: scalar
+        """
+        self.eval()
+        with torch.no_grad():
+            state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)  # Add batch dimension
+            policy_probs, value = self.forward(state_tensor)
+            return policy_probs.squeeze(0).numpy(), value.item()
+
 model = DummyModel()
 probs, value = model(torch.randn(1, 3, 11, 11))
 print("Policy logits shape:", probs.shape)  # Expected: (1, 121)
