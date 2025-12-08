@@ -1,23 +1,18 @@
 # generate_selfplay_data.py
 
 import pickle
+from pyexpat import model
 from agents.Group21.SelfPlay import SelfPlay
 from src.Game import Game
 import numpy as np
-
-class RandomNN:
-    def predict(self, board):
-        size = board.size
-
-        full_pi = np.ones(size * size) / (size * size)
-        v = 0  
-
-        return full_pi, v
+from network_dev.saved_models.RandomNN import RandomNN
     
 def main():
+    # Load a model from saved models (here we use a random model as a placeholder)
     nn = RandomNN()
 
     # Initialize SelfPlay engine
+    
     self_play_engine = SelfPlay(
         neural_net=nn,
         game_cls=Game,  
