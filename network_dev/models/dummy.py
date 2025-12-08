@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 class DummyModel(nn.Module):
     def __init__(self):
@@ -41,7 +42,7 @@ class DummyModel(nn.Module):
         """
         self.eval()
         with torch.no_grad():
-            state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)  # Add batch dimension
+            state_tensor = torch.tensor(np.array(state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
             policy_probs, value = self.forward(state_tensor)
             return policy_probs.squeeze(0).numpy(), value.item()
 
