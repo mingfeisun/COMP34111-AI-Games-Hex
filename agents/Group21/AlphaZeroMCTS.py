@@ -2,6 +2,7 @@ import math
 import numpy as np
 import copy
 from src.Colour import Colour 
+from agents.Group21.utils import encode_board
 
 class AlphaZeroMCTS:
     def __init__(self, neural_net, cpuct=1.0):
@@ -17,7 +18,7 @@ class AlphaZeroMCTS:
     def run(self, game, simulations=800):
         '''Runs MCTS simulations starting from the current game state'''
         board = game.board
-        player = game.current_player
+        player = game.current_player # is RED or BLUE
 
         for _ in range(simulations):
             self.search(board, player)
@@ -53,8 +54,10 @@ class AlphaZeroMCTS:
             ]
             self.Vs[s] = legal_moves
 
-            # Evaluate state using NN
-            policy, v = self.neural_net.predict(board)
+            # Evaluate state using NN (provide possible moves masking)
+            state = encode_board(board, player)
+
+            policy, v = self.neural_net.predict(state)
             # Creates a probability distribution only over legal moves
             size = board.size
             p = np.array([policy[i * size + j] for (i, j) in legal_moves])
