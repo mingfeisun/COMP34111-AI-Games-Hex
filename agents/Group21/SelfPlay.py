@@ -14,7 +14,8 @@ class SelfPlay:
     # Playing a single game
     def play_game(self):
         examples = []
-
+        
+        # Initialize players with neural nets
         player1 = Player("Player1", MCTSAlphaZeroAgent(Colour.RED, self.nn, self.simulations))
         player2 = Player("Player2", MCTSAlphaZeroAgent(Colour.BLUE, self.nn, self.simulations))
 
