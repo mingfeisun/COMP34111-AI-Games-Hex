@@ -3,6 +3,7 @@ from src.Colour import Colour
 from agents.Group21.MCTSAlphaZeroAgent import MCTSAlphaZeroAgent
 from src.Move import Move
 from src.Player import Player
+from agents.Group21.utils import encode_board
 
 class SelfPlay:
     def __init__(self, neural_net, game_cls, simulations=800):
@@ -32,7 +33,7 @@ class SelfPlay:
             legal_moves, pi = current_agent.mcts.run(game, simulations=self.simulations)
 
             # store training sample but without z yet
-            states.append(self.encode_board(game.board, current_player_colour))
+            states.append(encode_board(game.board, current_player_colour))
             policies.append(pi)
             players_to_move.append(current_player_colour)
 
@@ -53,25 +54,3 @@ class SelfPlay:
             examples.append((s, p, z))
 
         return examples
-    
-    def encode_board(self, board, current_player):
-        size = board.size
-        player_plane = []
-        opponent_plane = []
-        # Red is player1, Blue is player2
-        player_to_move_plane = [1 if current_player == Colour.RED else 0] * (size * size)
-
-        for i in range(size):
-            for j in range(size):
-                if board.tiles[i][j].colour == current_player:
-                    player_plane.append(1)
-                    opponent_plane.append(0)
-                elif board.tiles[i][j].colour == Colour.opposite(current_player):
-                    player_plane.append(0)
-                    opponent_plane.append(1)
-                else:
-                    player_plane.append(0)
-                    opponent_plane.append(0)
-        
-        # Return a 3D numpy array with shape (3, size, size)
-        return [np.array(player_plane), np.array(opponent_plane), np.array(player_to_move_plane)]

@@ -17,3 +17,6 @@ class MCTSAlphaZeroAgent(AgentBase):
         move_index = np.argmax(pi)
         return legal_moves[move_index]
 
+#TODO: implement actual model loading
+    def load_model(self):
+        pass
