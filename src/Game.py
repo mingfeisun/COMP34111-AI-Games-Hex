@@ -148,8 +148,8 @@ class Game:
             start = time()
             m = playerAgent.make_move(self.turn, playerBoard, opponentMove)
             end = time()
-
-            assert boardCopy == self.board, "Board was modified, Possible cheating!"
+            
+            assert boardCopy == self.board, "Board was modified, Possible cheating!" 
             assert turnCopy == self.turn, "Turn was modified, Possible cheating!"
             assert (
                 playerCopy == self.players
@@ -185,22 +185,30 @@ class Game:
         """Performs a valid move on the board, then prints its results."""
 
         if m.x == -1 and m.y == -1:
-            self.players[Colour.RED], self.players[Colour.BLUE] = (
-                self.players[Colour.BLUE],
-                self.players[Colour.RED],
-            )
-            self.players[Colour.RED].agent.colour = Colour.RED
-            self.players[Colour.BLUE].agent.colour = Colour.BLUE
-            logger.debug("This is a swap move.")
-            logger.debug(
-                f"{self.players[Colour.RED].name} colour:{self.players[Colour.RED].agent.colour.name}"
-            )
-            logger.debug(
-                f"{self.players[Colour.BLUE].name}, colour:{self.players[Colour.BLUE].agent.colour.name}"
-            )
 
-            self.current_player = Colour.opposite(self.current_player)
+            logger.debug("Swap move sequence initiated.")
+
+            ##  Create a duplicate, so as not to iterate over board
+            ##  whilst changing it.
+
+            board_duplicate = copy.deepcopy(self.board)
+
+            for x, column in enumerate(board_duplicate.tiles):
+
+                for y, tile in enumerate(column):
+
+                    if tile.colour == Colour.RED:
+
+                        self.board.set_tile_colour(x, y, Colour.BLUE)
+
+                    elif tile.colour == Colour.BLUE:
+
+                        self.board.set_tile_colour(x, y, Colour.RED)
+                
+            logger.debug("Swapped colours on board.")
+            
             self.has_swapped = True
+
         else:
             self.board.set_tile_colour(m.x, m.y, self.current_player)
 
