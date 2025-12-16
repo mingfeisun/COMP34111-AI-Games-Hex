@@ -13,7 +13,10 @@ docker build --build-arg UID=$UID -t hex .
 
 The building process will take a while.
 
-To run the container use:
+To run the container you can use:
+
+<details>
+<summary>1. Terminal</summary>
 
 ```bash
 docker run --cpus=8 --memory=8G -v "$(pwd)":/home/hex --name hex --rm -it hex /bin/bash
@@ -25,6 +28,33 @@ The current repo will be mapped to `/home/hex` within the container.
 If you `cd hex` you should be able to see all your
 local file. Any changes made to that directory will reflect to your system directory. This will be the command we use
 to create the running environment for playing each game, so your agent can at most you 8 CPUs and uses 8 GB of memory.
+</details>
+
+<details>
+<summary>2. Devcontainer in VS Code</summary>
+
+You can open the repository inside a docker container in VS Code via a devcontainer.
+
+1. Open the Repository in VS Code
+	- Launch Visual Studio Code.
+	- Open the folder you just cloned.
+
+2. Install the "Dev Containers" Extension
+	- Go to the Extensions view (Ctrl+Shift+X) and search for "Dev Containers".
+	- Install the extension published by Microsoft.
+
+3. Reopen in Dev Container
+	- Press `Ctrl+Shift+P` to open the Command Palette.
+	- Type and select `Dev Containers: Reopen in Dev Container`.
+	- VS Code will build and start the devcontainer using Docker. This may take several minutes the first time.
+
+The devcontainer config can be found at `<repo-root>/devcontainer/devcontainer.json`.
+
+The default runArgs let your agent use at most 8 CPUs and 8 GB of memory.
+If you need GPU access, pass `--runtime=nvidia` to runArgs list in the config.
+
+Any changes made to the repo in VS Code will reflect to your system directory.
+</details>
 
 To run a game of Hex, you can use:
 

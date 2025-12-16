@@ -1,0 +1,11 @@
+{
+  "name": "hex-devcontainer",
+  "image": "hex",
+
+  // Resource limits (equivalent to --cpus=8 --memory=8G)
+  "runArgs": [
+    "--cpus=8",
+    "--memory=8G",
+    "--name=hex-devcontainer"
+  ]
+}
