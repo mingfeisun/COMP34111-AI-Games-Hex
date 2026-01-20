@@ -13,6 +13,9 @@ from src.Colour import Colour
 from src.EndState import EndState
 from src.Game import Game, format_result
 from src.Player import Player
+import os
+import gc
+import torch
 
 # Set up logger
 logging.basicConfig(
@@ -39,6 +42,34 @@ fieldnames = [
 time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
 
+def clear_cuda_memory():
+    """Clear CUDA memory cache."""
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+    gc.collect()
+
+
+def unload_agent(player):
+    """Unload an agent and free its resources."""
+    if player is None:
+        return
+
+    try:
+        # Delete agent and its model to free memory
+        if hasattr(player, "agent"):
+            agent = player.agent
+            if hasattr(agent, "model"):
+                del agent.model
+            del player.agent
+        del player
+    except Exception as e:
+        logger.warning(f"Error during agent cleanup: {e}")
+
+    # Force garbage collection and clear CUDA cache
+    clear_cuda_memory()
+
+
 def get_player_name(agentPair: tuple[str, str]):
     """Extract player names from the agent pair."""
     player1, player2 = agentPair
@@ -54,7 +85,9 @@ def get_results_for_game_global_timeout(player1, player2, logDest, errorGameList
         if os.path.exists(logDest):
             with open(logDest, "r") as logFile:
                 lines = logFile.readlines()
-                if "winner" in lines[-1].lower():
+                if len(lines) == 0:
+                    winner_name = player2
+                elif "winner" in lines[-1].lower():
                     winner_name = lines[-1].split(",")[1].strip()
                 else:
                     last_mover = lines[-1].strip()
@@ -68,9 +101,15 @@ def get_results_for_game_global_timeout(player1, player2, logDest, errorGameList
             with open(errorGameListPath, "r") as errFile:
                 lines = errFile.readlines()
                 for l in lines:
-                    p1, p2, errpr = l.split(",")
-                    if player1 in p1 and player2 in p2:
-                        winner_name = player2
+                    try:
+                        p1, p2, errpr = l.split(",")
+                        if player1 in p1 and player2 in p2:
+                            winner_name = player2
+
+                    except Exception as e:
+                        print(e)
+                        print(l)
+                        winner_name = "Unknown"
 
         return winner_name
 
@@ -102,64 +141,80 @@ def run(games: list[tuple[str, str]]):
     resultFilePath = f"game_results_{time}.csv"
     errorGameListPath = f"error_game_list_{time}.log"
 
+    BATCH_SIZE = 8  # number of games to run in parallel
+
     with open(resultFilePath, "w", newline="") as csvFile:
         writer = csv.DictWriter(csvFile, fieldnames=fieldnames)
         writer.writeheader()
 
-    # Run the tournament
     gameResults = []
-    with Pool() as pool:
-        # using apply_async to apply the game function to the player pair
-        p1Name, p2Name = get_player_name(games[0])
-        logDST = f"./all_game_logs_{time}/{p1Name}_vs_{p2Name}.log"
-        result = []
-        for agentPair in games:
-            p1Name, p2Name = get_player_name(agentPair)
-            logDST = f"./all_game_logs_{time}/{p1Name}_vs_{p2Name}.log"
-            result.append(
-                pool.apply_async(
-                    run_match,
-                    (agentPair, logDST),
+
+    with Pool(maxtasksperchild=1) as pool:
+        for batch_start in range(0, len(games), BATCH_SIZE):
+            batch = games[batch_start : batch_start + BATCH_SIZE]
+            result = []
+
+            # submit only this batch
+            for agentPair in batch:
+                p1Name, p2Name = get_player_name(agentPair)
+                logDST = f"all_game_logs/{p1Name}_vs_{p2Name}.log"
+
+                result.append(
+                    pool.apply_async(
+                        run_match,
+                        (agentPair, logDST),
+                    )
                 )
-            )
 
-        # gather all the results. Error of a game is captured and written to a log file.
-        for i, gameResult in enumerate(result):
-            game_finished = False
-            try:
-                r = gameResult.get(timeout=TIME_OUT_LIMIT)
-                with open(resultFilePath, "a", newline="") as csvFile:
-                    writer = csv.DictWriter(csvFile, fieldnames=fieldnames)
-                    writer.writerow(r)
-                gameResults.append(r)
-                game_finished = True
+            # collect results for this batch
+            for i, gameResult in enumerate(result):
+                game_finished = False
+                game_idx = batch_start + i
+                agentPair = games[game_idx]
 
-            except TimeoutError as error:
-                logger.warning(f"Timed out between {games[i]}")
-                with open(errorGameListPath, "a") as errFile:
-                    errFile.write(f"{games[i]}, {repr(error)}\n")
+                p1Name, p2Name = get_player_name(agentPair)
+                logDST = f"all_game_logs/{p1Name}_vs_{p2Name}.log"
 
-            except Exception as error:
-                logger.error(f"Exception occurred between {games[i]}: {repr(error)}")
-                logger.error(traceback.format_exc())
-                with open(errorGameListPath, "a") as errFile:
-                    errFile.write(
-                        f"{games[i]}, {repr(error), {traceback.format_exc()}}\n"
-                    )
-            finally:
-                if not game_finished:
-                    # if the game did not finish, we need to write the result to the csv file
-                    r = get_results_for_game_global_timeout(
-                        games[i][0],
-                        games[i][1],
-                        logDest=logDST,
-                        errorGameListPath=errorGameListPath,
-                    )
+                try:
+                    r = gameResult.get(timeout=TIME_OUT_LIMIT)
 
                     with open(resultFilePath, "a", newline="") as csvFile:
                         writer = csv.DictWriter(csvFile, fieldnames=fieldnames)
                         writer.writerow(r)
+
                     gameResults.append(r)
+                    game_finished = True
+
+                except TimeoutError as error:
+                    logger.warning(f"Timed out between {agentPair}")
+                    with open(errorGameListPath, "a") as errFile:
+                        errFile.write(f"{agentPair}, {repr(error)}\n")
+
+                except Exception as error:
+                    logger.error(
+                        f"Exception occurred between {agentPair}: {repr(error)}"
+                    )
+                    logger.error(traceback.format_exc())
+                    with open(errorGameListPath, "a") as errFile:
+                        single_line_error = traceback.format_exc().replace("\n", " -- ")
+                        errFile.write(
+                            f"{agentPair}, {repr(error)}, {single_line_error}\n"
+                        )
+
+                finally:
+                    if not game_finished:
+                        r = get_results_for_game_global_timeout(
+                            agentPair[0],
+                            agentPair[1],
+                            logDest=logDST,
+                            errorGameListPath=errorGameListPath,
+                        )
+
+                        with open(resultFilePath, "a", newline="") as csvFile:
+                            writer = csv.DictWriter(csvFile, fieldnames=fieldnames)
+                            writer.writerow(r)
+
+                        gameResults.append(r)
 
     export_stats(gameResults)
 
@@ -208,66 +263,105 @@ def run_match(agentPair: tuple[str, str], logDest: str) -> dict:
         )
         logger.error(traceback.format_exc())
     except Exception as error:
-        logger.error(f"Exception occured importing {player1}: {repr(error)}")
+        logger.error(f"Exception occurred importing {player1}: {repr(error)}")
         logger.error(traceback.format_exc())
 
-    if player1_class is None and player2_class is None:
-        logger.info(
-            f"Both agents failed to load for game between {player1} and {player2}."
-        )
-        result = format_result(
-            player1_name=player1.split(".")[1],
-            player2_name=player2.split(".")[1],
-            winner="",
-            win_method=EndState.FAILED_LOAD,
-            player_1_move_time="",
-            player_2_move_time="",
-            player_1_turn="",
-            player_2_turn="",
-            total_turns="",
-            total_time="",
-        )
-    elif player1_class is None:
-        logger.info(f"Agent {player1} failed to load, {player2} wins.")
-        result = format_result(
-            player1_name=player1.split(".")[1],
-            player2_name=player2_class.name,
-            winner=player2_class.name,
-            win_method=EndState.FAILED_LOAD,
-            player_1_move_time="",
-            player_2_move_time="",
-            player_1_turn="",
-            player_2_turn="",
-            total_turns="",
-            total_time="",
-        )
-    elif player2_class is None:
-        logger.info(f"Agent {player2} failed to load, {player1} wins.")
-        result = format_result(
-            player1_name=player1_class.name,
-            player2_name=player2.split(".")[1],
-            winner=player1_class.name,
-            win_method=EndState.FAILED_LOAD,
-            player_1_move_time="",
-            player_2_move_time="",
-            player_1_turn="",
-            player_2_turn="",
-            total_turns="",
-            total_time="",
-        )
-    else:
-        # the getattr is to get the class from the module, then instantiate it with the colour
-        g = Game(
-            player1=player1_class,
-            player2=player2_class,
-            board_size=11,
-            silent=True,
-            logDest=logDest,
-        )
-        result = g.run()
-        logger.info(f"Game complete normally between {player1} and {player2}")
+    try:
+        if player1_class is None and player2_class is None:
+            logger.info(
+                f"Both agents failed to load for game between {player1} and {player2}."
+            )
+            result = format_result(
+                player1_name=player1.split(".")[1],
+                player2_name=player2.split(".")[1],
+                winner="",
+                win_method=EndState.FAILED_LOAD,
+                player_1_move_time="",
+                player_2_move_time="",
+                player_1_turn="",
+                player_2_turn="",
+                total_turns="",
+                total_time="",
+            )
+        elif player1_class is None:
+            logger.info(f"Agent {player1} failed to load, {player2} wins.")
+            result = format_result(
+                player1_name=player1.split(".")[1],
+                player2_name=player2_class.name,
+                winner=player2_class.name,
+                win_method=EndState.FAILED_LOAD,
+                player_1_move_time="",
+                player_2_move_time="",
+                player_1_turn="",
+                player_2_turn="",
+                total_turns="",
+                total_time="",
+            )
+        elif player2_class is None:
+            logger.info(f"Agent {player2} failed to load, {player1} wins.")
+            result = format_result(
+                player1_name=player1_class.name,
+                player2_name=player2.split(".")[1],
+                winner=player1_class.name,
+                win_method=EndState.FAILED_LOAD,
+                player_1_move_time="",
+                player_2_move_time="",
+                player_1_turn="",
+                player_2_turn="",
+                total_turns="",
+                total_time="",
+            )
+        else:
+            # the getattr is to get the class from the module, then instantiate it with the colour
+            g = Game(
+                player1=player1_class,
+                player2=player2_class,
+                board_size=11,
+                silent=False,  # Set to False to record log of each game
+                logDest=logDest,
+            )
+            result = g.run()
+            logger.info(f"Game complete normally between {player1} and {player2}")
+    finally:
+        # Clean up agents after the game
+        unload_agent(player1_class)
+        unload_agent(player2_class)
+        logger.info(f"Cleaned up agents for game between {player1} and {player2}")
 
     return result
+
+
+def get_unknown_results(player1, player2, errorGameListPath):
+    """
+    If the winner is set to unknown in the results csv, this function will try to parse the error log
+    to determine the winner.
+
+    :param player1: group name of player 1
+    :param player2: group name of player 2
+    :param errorGameListPath: path to the directory containing error logs
+    """
+    winner_name = ""
+    if os.path.exists(errorGameListPath):
+        full_path = os.path.join(errorGameListPath, f"{player1}_vs_{player2}.log")
+        if player1.lower() == "Group17".lower():
+            pass
+        with open(full_path, "r") as errFile:
+            lines = errFile.readlines()
+            if len(lines) == 0:
+                winner_name = player2
+                loser_name = player1
+            else:
+                if player1.lower() in lines[-1].lower():
+                    winner_name = player1
+                    loser_name = player2
+                elif player2.lower() in lines[-1].lower():
+                    winner_name = player2
+                    loser_name = player1
+                else:
+                    winner_name = "Unknown"
+                    loser_name = "Unknown"
+
+    return winner_name, loser_name
 
 
 def export_stats(gameResults: list[dict]):
@@ -297,6 +391,8 @@ def export_stats(gameResults: list[dict]):
         player2 = result["player2"]
         winner = result["winner"]
         loser = player2 if player1 == winner else player1
+        if winner == "Unknown":
+            winner, loser = get_unknown_results(player1, player2, "all_game_logs")
         if result["win_method"] == EndState.FAILED_LOAD:
             if winner == "":
                 continue
@@ -312,10 +408,14 @@ def export_stats(gameResults: list[dict]):
 
             playerStats[player1]["matches"] += 1
             playerStats[player2]["matches"] += 1
-            playerStats[player1]["total_move_time"] += result["player1_move_time"]
-            playerStats[player2]["total_move_time"] += result["player2_move_time"]
-            playerStats[player1]["total_moves"] += result["player1_turns"]
-            playerStats[player2]["total_moves"] += result["player2_turns"]
+            playerStats[player1]["total_move_time"] += float(
+                result["player1_move_time"]
+            )
+            playerStats[player2]["total_move_time"] += float(
+                result["player2_move_time"]
+            )
+            playerStats[player1]["total_moves"] += int(result["player1_turns"])
+            playerStats[player2]["total_moves"] += int(result["player2_turns"])
 
             playerStats[winner]["wins"] += 1
             playerStats[loser]["illegal_moves_loss"] += (
@@ -343,6 +443,23 @@ def export_stats(gameResults: list[dict]):
         writer.writerow(["player"] + list(statEntry.keys()))
         for player, stats in playerStats.items():
             writer.writerow([player] + list(stats.values()))
+
+
+def process_results_after_tournament(src: str):
+    """
+    generate the stat file from the given game result csv file.
+    Can be used after the tournament has been run to generate the stats file without running the tournament again.
+
+    :param src: src path to the game result csv file
+    :type src: str
+    """
+    gameResults = []
+    with open(src, "r") as csvFile:
+        reader = csv.DictReader(csvFile)
+        for row in reader:
+            gameResults.append(row)
+
+    export_stats(gameResults)
 
 
 if __name__ == "__main__":
@@ -383,6 +500,7 @@ if __name__ == "__main__":
     # Each item on the partial list will play against every agent in the agents directory
     if args.partialTournament:
         with open(args.partialTournament) as f:
+            games = []
             for line in f:
                 # the given line as player A
                 games.extend(
@@ -394,6 +512,7 @@ if __name__ == "__main__":
                 )
 
         # remove all repeat and self play
-        games = [(i, j) for i, j in list(set(games)) if i != j]
+    games = [(i, j) for i, j in list(set(games)) if i != j]
 
     run(games)
+    print("Finished Running Tournament")
