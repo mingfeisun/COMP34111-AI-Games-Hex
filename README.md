@@ -1,56 +1,85 @@
-# COMP34120 AI and Games Coursework
+# COMP34111 AI and Games: Hex
 
-We will be running each within this specific Dockerfile image and with this specific Docker environment. So make sure
-your agent will work within this container environment and under the constrain.
+This repository holds the Hex game engine for the COMP34111 group project. We
+mark every bot inside the Docker image built from this `Dockerfile`, so make
+sure your bot works inside the container.
 
-Inside the Dockerfile, two versions of PyTorch and Tensorflow are available. Select the one you need based on the availability and use of the GPU.
-
-To build Dockerfile.
-
-```bash
-docker build --build-arg UID=$UID -t hex .
-```
-
-The building process will take a while.
-
-To run the container use:
+## Build the image
 
 ```bash
-docker run --cpus=8 --memory=8G -v "$(pwd)":/home/hex --name hex --rm -it hex /bin/bash
+docker build -t hex .
 ```
 
-If you need GPU access, pass `--runtime=nvidia` to the docker run command.
+The build takes a while. On Linux or macOS you can add
+`--build-arg UID=$(id -u)`, so that files you create in the container belong
+to your user.
 
-The current repo will be mapped to `/home/hex` within the container.
-If you `cd hex` you should be able to see all your
-local file. Any changes made to that directory will reflect to your system directory. This will be the command we use
-to create the running environment for playing each game, so your agent can at most you 8 CPUs and uses 8 GB of memory.
+## Run the container
 
-To run a game of Hex, you can use:
+Linux, macOS or WSL (bash):
+
+```bash
+docker run -it --cpus=8 --memory=8g --name hex -v "$(pwd)":/home/hex hex bash
+```
+
+Windows PowerShell:
+
+```powershell
+docker run -it --cpus=8 --memory=8g --name hex -v "${PWD}:/home/hex" hex bash
+```
+
+The container starts in `/home/hex`, which is this repository. Changes there
+are also changes on your computer. Type `exit` to stop the container. To start
+it again, use `docker start -i hex`. To remove it, use `docker rm hex`.
+
+## Play a game
 
 ```bash
 python3 Hex.py
 ```
 
-By default, two `agents/DefaultAgents/NaiveAgent.py` agent will play against each. To see all the available options and
-help message use `python3 Hex.py --help`.
-
-To exit the docker container you can simply do `exit`. This will stop the container.
-
-To enter the container again you can simply use:
+By default, two `agents/DefaultAgents/NaiveAgent.py` agents play each other.
+To choose the agents, give the module and class name of each player:
 
 ```bash
-docker start -i hex
+python3 Hex.py -p1 "agents.Group7.MyAgent MyAgent" -p2 "agents.DefaultAgents.NaiveAgent NaiveAgent"
 ```
 
-To run the test suite, you can use:
+`python3 Hex.py --help` shows all options.
+
+## Check your submission
+
+```bash
+python3 check_submission.py 7      # checks agents/Group7/
+```
+
+## Limits in marked games
+
+- 5 minutes per player per game for all moves (chess clock).
+- 3 minutes for your agent's start-up (`__init__`).
+- 8 CPU cores and 8 GB of memory per agent. There is no GPU. PyTorch is
+  installed, but it uses the CPU.
+- No network during games. Use only the packages in the image.
+
+The full rules are in the coursework instructions on Canvas.
+
+## Bots in other languages
+
+`agents/DefaultAgents/ExternalAgent.py` shows how a Python agent class starts a
+program in another language and talks to it. The image has a Java JDK and
+`g++`. Compile inside the container, for example:
+
+```bash
+javac -d agents/DefaultAgents agents/DefaultAgents/NaiveAgent.java
+```
+
+## Run the tests
 
 ```bash
 python3 -m unittest discover
 ```
 
-To use a GPU, use **CUDA 12.3.0** with the preinstalled **TensorFlow 2.19.0** and **PyTorch 2.5.1+cu121**, or ensure any other versions you install are compatible with them.
+## Game documentation
 
-## Misc
-
-PDF doc link: [typst](https://typst.app/project/wimHW-RlEYIYkqEVJWgrXC)
+How the engine works, the message format for other languages, the log
+format, `cmd.txt` and the rules for marked games: [docs/GAME.md](docs/GAME.md).
