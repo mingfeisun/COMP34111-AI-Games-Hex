@@ -157,7 +157,7 @@ class Board:
                         base = "·"
                     cell_char = Colour.green(base)
                 else:
-                    cell_char = Colour.get_char(tile.colour)
+                    cell_char = Colour.display_char(tile.colour)
 
                 output += cell_char + " "
 
@@ -169,6 +169,17 @@ class Board:
         ) + "\n"
 
         return output
+
+    def to_protocol_string(self) -> str:
+        """Returns the board in the external-agent protocol format: one
+        string per row (x), joined by commas; "R", "B", or "0" per tile (y).
+        Example for a 3x3 board with Red at (0, 1): "0R0,000,000".
+        """
+
+        return ",".join(
+            "".join(Colour.to_protocol_char(tile.colour) for tile in row)
+            for row in self._tiles
+        )
 
     def get_winner(self) -> Colour:
         return self._winner
