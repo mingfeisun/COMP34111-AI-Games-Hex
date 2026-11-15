@@ -2,6 +2,7 @@ import copy
 import logging
 import os
 import sys
+import traceback
 from time import perf_counter_ns as time
 from typing import TextIO
 
@@ -90,7 +91,9 @@ class Game:
             logDest = os.devnull
 
         if logDest != sys.stderr:
-            self.logDest = open(logDest, "w")
+            # line buffered, so the log on disk is complete up to the last
+            # move even if the game hangs or the process is killed
+            self.logDest = open(logDest, "w", buffering=1)
         else:
             self.logDest = logDest
 
@@ -141,18 +144,31 @@ class Game:
 
             boardCopy = copy.deepcopy(self.board)
             turnCopy = self.turn
-            playerCopy = copy.deepcopy(self.players)
+            # A snapshot of what the cheat check compares (see Player.__eq__):
+            # name, agent class and move time per colour. A deep copy of the
+            # players also copied the agents, which failed for agents holding a
+            # subprocess, lock or thread, and cost time for large agents.
+            playerCopy = self._players_snapshot()
 
             playerBoard = copy.deepcopy(self.board)
 
             start = time()
-            m = playerAgent.make_move(self.turn, playerBoard, opponentMove)
+            try:
+                m = playerAgent.make_move(self.turn, playerBoard, opponentMove)
+            except Exception:
+                # an exception in the agent loses the game for that agent
+                self.crash_traceback = traceback.format_exc()
+                logger.info(
+                    f"Player {currentPlayer.name} raised an exception:\n{self.crash_traceback}"
+                )
+                endState = EndState.CRASH
+                break
             end = time()
 
             assert boardCopy == self.board, "Board was modified, Possible cheating!"
             assert turnCopy == self.turn, "Turn was modified, Possible cheating!"
             assert (
-                playerCopy == self.players
+                playerCopy == self._players_snapshot()
             ), "Players were modified, Possible cheating!"
             assert end > start, "Move time is negative, Possible cheating!"
 
@@ -180,6 +196,12 @@ class Game:
 
             self.current_player = Colour.opposite(self.current_player)
         return self._end_game(endState)
+
+    def _players_snapshot(self) -> dict:
+        return {
+            colour: (id(p), p.name, hash(p.agent), p.move_time)
+            for colour, p in self.players.items()
+        }
 
     def _make_move(self, m: Move):
         """Performs a valid move on the board, then prints its results."""
@@ -237,6 +259,19 @@ class Game:
                     f"Player {self.players[Colour.opposite(self.current_player)].name} has won"
                 )
                 winner = self.players[Colour.opposite(self.current_player)].name
+
+            case EndState.CRASH:
+                # the player printed is the winner
+                logger.info(
+                    f"Player {self.players[self.current_player].name} crashed"
+                )
+                logger.info(
+                    f"Player {self.players[Colour.opposite(self.current_player)].name} has won"
+                )
+                winner = self.players[Colour.opposite(self.current_player)].name
+                if getattr(self, "crash_traceback", None):
+                    for line in self.crash_traceback.rstrip().splitlines():
+                        print(f"# {line}", file=self.logDest)
 
             case EndState.TIMEOUT:
                 # the player printed is the winner
