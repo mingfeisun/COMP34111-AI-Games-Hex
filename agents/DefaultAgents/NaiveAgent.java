@@ -34,7 +34,8 @@ class NaiveAgent{
                 boolean res = interpretMessage(msg);
                 if (res == false) break;
             } catch (IOException e){
-                System.out.println("ERROR: Could not establish I/O.");
+                // debug and error text go to stderr; stdout is only for moves
+                System.err.println("ERROR: Could not establish I/O.");
                 return;
             }
         }
@@ -46,10 +47,12 @@ class NaiveAgent{
             return false;
         }
 
-        turn++;
-
+        // message format: TYPE;MOVE;BOARD;TURN;  (MOVE is empty for START and SWAP)
         String[] msg = s.strip().split(";");
         String board = msg[2];
+        // use the game's turn number from the message: counting messages here
+        // gives the wrong turn for Blue and after a swap
+        turn = Integer.parseInt(msg[3]);
         switch (msg[0]){
             case "START":
                 if (colour.equals("R")){
@@ -75,6 +78,8 @@ class NaiveAgent{
 
     private void makeMove(String board){
         if (turn == 2 && new Random().nextInt(2) == 1){
+            // after our own swap we play the other colour
+            colour = opp(colour);
             sendMessage("-1,-1");
             return;
         }
