@@ -19,6 +19,12 @@ class TestColour(unittest.TestCase):
         self.assertEqual(Colour.RED.get_char(), "R")
         self.assertEqual(Colour.BLUE.get_char(), "B")
 
+    def test_get_char_instance_with_argument(self):
+        # worked on the 2025 engine (static method called through an instance)
+        self.assertEqual(Colour.RED.get_char(Colour.BLUE), "B")
+        self.assertEqual(Colour.RED.get_char(None), "0")
+        self.assertEqual(Colour.BLUE.opposite(Colour.BLUE), Colour.RED)
+
     def test_to_protocol_char(self):
         self.assertEqual(Colour.RED.to_protocol_char(), "R")
         self.assertEqual(Colour.to_protocol_char(Colour.BLUE), "B")

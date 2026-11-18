@@ -1,5 +1,4 @@
 from enum import Enum
-from functools import partial
 
 # ANSI escape codes for colours (screen output only, never the protocol)
 RESET = "\033[0m"
@@ -12,11 +11,7 @@ EMPTY_FG = "\033[90m"
 class _ClassOrInstanceMethod:
     """Lets a method be called as Colour.f(c) and as c.f().
 
-    Before commit 487517f (25 Nov 2025) these methods were plain functions, so
-    both call forms worked. That commit made them static methods, and the
-    instance form (for example colour.get_char()) raised a TypeError. This
-    descriptor accepts both forms again, so agents written for either engine
-    version keep working.
+    Accepts the form c.f(other) as well, for compatibility with the 2025 engine.
     """
 
     def __init__(self, func):
@@ -27,7 +22,15 @@ class _ClassOrInstanceMethod:
     def __get__(self, obj, objtype=None):
         if obj is None:
             return self.func
-        return partial(self.func, obj)
+        func = self.func
+
+        def bound(*args):
+            # c.f() uses c; c.f(other) uses other, as a static method called
+            # through an instance did on the 2025 engine
+            return func(*args) if args else func(obj)
+
+        bound.__doc__ = func.__doc__
+        return bound
 
 
 class Colour(Enum):
