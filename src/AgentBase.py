@@ -27,8 +27,7 @@ class AgentBase(ABC):
         self._colour = colour
 
     def opp_colour(self) -> Colour:
-        """Returns the char representation of the colour opposite to the
-        current one.
+        """Returns the Colour opposite to the current one.
         """
 
         if self._colour == Colour.RED:
