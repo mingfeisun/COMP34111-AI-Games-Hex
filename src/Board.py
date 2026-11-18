@@ -40,10 +40,14 @@ class Board:
 
         return True
 
+    @staticmethod
     def from_string(string_input, board_size=11):
-        """Loads a board from a string representation. If bnf=True, it will
-        load a protocol-formatted string. Otherwise, it will load from a
-        human-readable-formatted board.
+        """Loads a board from a string representation. The string is
+        rows separated by newlines, with tiles R, B, 0 separated by spaces. 
+        For example, a 3x3 board with Red at (0, 1) would be represented as:
+        0 R 0
+        0 0 0
+        0 0 0
         """
 
         b = Board(board_size=board_size)
@@ -264,11 +268,6 @@ class Board:
 
 
 if __name__ == "__main__":
-    b = Board.from_string(
-        "0R000B00000,0R000000000,0RBB0000000,0R000000000,0R00B000000,"
-        + "0R000BB0000,0R0000B0000,0R00000B000,0R000000B00,0R0000000B0,"
-        + "0R00000000B",
-        bnf=True,
-    )
-    b.print_board(bnf=False)
-    print(b.has_ended(), b.get_winner())
+    b = Board.from_string("R B 0\nR R 0\nR 0 B", board_size=3)
+    print(b)
+    print(b.has_ended(Colour.RED), b.get_winner())
