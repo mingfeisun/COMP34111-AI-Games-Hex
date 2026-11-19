@@ -16,14 +16,8 @@ class NaiveAgent(AgentBase):
     You CANNOT modify the AgentBase class, otherwise your agent might not function.
     """
 
-    _choices: list[Move]
-    _board_size: int = 11
-
     def __init__(self, colour: Colour):
         super().__init__(colour)
-        self._choices = [
-            (i, j) for i in range(self._board_size) for j in range(self._board_size)
-        ]
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """The game engine will call this method to request a move from the agent.
@@ -41,9 +35,15 @@ class NaiveAgent(AgentBase):
             Move: The agent's move
         """
 
-        # if turn == 2 and choice([0, 1]) == 1:
-        if turn == 2:
+        if turn == 2 and choice([0, 1]) == 1:
             return Move(-1, -1)
-        else:
-            x, y = choice(self._choices)
-            return Move(x, y)
+
+        # choose only from empty tiles, so the move is always legal
+        empty = [
+            (tile.x, tile.y)
+            for row in board.tiles
+            for tile in row
+            if tile.colour is None
+        ]
+        x, y = choice(empty)
+        return Move(x, y)

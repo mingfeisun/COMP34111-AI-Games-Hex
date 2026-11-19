@@ -27,8 +27,7 @@ class AgentBase(ABC):
         self._colour = colour
 
     def opp_colour(self) -> Colour:
-        """Returns the char representation of the colour opposite to the
-        current one.
+        """Returns the Colour opposite to the current one.
         """
 
         if self._colour == Colour.RED:
@@ -39,4 +38,8 @@ class AgentBase(ABC):
             raise ValueError(f"Invalid colour: {self._colour}")
 
     def __hash__(self) -> int:
-        return hash(inspect.getsource(self.__class__))
+        # Same value for all instances of the same class (also for deep
+        # copies), as before. inspect.getsource() failed for classes without
+        # Python source (for example compiled with Cython), so it is not used.
+        cls = self.__class__
+        return hash((cls.__module__, cls.__qualname__))

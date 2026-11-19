@@ -1,13 +1,16 @@
----
-name: "Test Python Syntex"
-on: [push]
+name: "Tests"
+on: [push, pull_request]
 jobs:
-  Explore-GitHub-Actions:
-    runs-on: ubuntu-2204
+  test:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
-      - run: python3 Hex.py
-      - run: python3 HexTournament.py
+          python-version: "3.12"
+      - name: Unit tests
+        run: python3 -m unittest discover
+      - name: Game between two Python agents
+        run: python3 Hex.py -l /tmp/py.log && tail -1 /tmp/py.log
+      - name: Game with the Java example agent (ExternalAgent)
+        run: python3 Hex.py -p1 "agents.DefaultAgents.ExternalAgent ExternalAgent" -l /tmp/java.log && tail -1 /tmp/java.log

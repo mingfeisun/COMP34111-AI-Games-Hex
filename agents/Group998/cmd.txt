@@ -1,1 +1,0 @@
-agents.Group998.NaiveAgent NaiveAgent

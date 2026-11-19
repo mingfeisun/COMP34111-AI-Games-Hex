@@ -2,10 +2,12 @@ import copy
 import logging
 import os
 import sys
+import traceback
 from time import perf_counter_ns as time
 from typing import TextIO
 
 from src.AgentBase import AgentBase
+from src.AgentProxy import AgentProxy, AgentTimeout
 from src.Board import Board
 from src.Colour import Colour
 from src.EndState import EndState
@@ -67,7 +69,11 @@ class Game:
         logDest: str | TextIO = sys.stderr,
         verbose: bool = False,
         silent: bool = False,
+        time_limit: bool = True,
     ):
+        """time_limit=False: do not end the game when a player uses more than
+        MAXIMUM_TIME (debug mode); the time is still measured."""
+        self.time_limit = time_limit
         self._turn = 0  # current turn count
         self._board = Board(board_size)
         self.current_player = Colour.RED  # current player
@@ -90,7 +96,9 @@ class Game:
             logDest = os.devnull
 
         if logDest != sys.stderr:
-            self.logDest = open(logDest, "w")
+            # line buffered, so the log on disk is complete up to the last
+            # move even if the game hangs or the process is killed
+            self.logDest = open(logDest, "w", buffering=1)
         else:
             self.logDest = logDest
 
@@ -113,6 +121,11 @@ class Game:
             self._end_game(None)
             print(f"Exception raised: {e}")
         finally:
+            # agents in their own process (AgentProxy): kill them and every
+            # process they started
+            for p in (self.player1, self.player2):
+                if isinstance(p.agent, AgentProxy):
+                    p.agent.close()
             if self.logDest != sys.stderr:
                 self.logDest.close()
 
@@ -141,18 +154,40 @@ class Game:
 
             boardCopy = copy.deepcopy(self.board)
             turnCopy = self.turn
-            playerCopy = copy.deepcopy(self.players)
+            # A snapshot of what the cheat check compares (see Player.__eq__):
+            # name, agent class and move time per colour. A deep copy of the
+            # players also copied the agents, which failed for agents holding a
+            # subprocess, lock or thread, and cost time for large agents.
+            playerCopy = self._players_snapshot()
 
             playerBoard = copy.deepcopy(self.board)
 
             start = time()
-            m = playerAgent.make_move(self.turn, playerBoard, opponentMove)
+            try:
+                m = playerAgent.make_move(self.turn, playerBoard, opponentMove)
+            except AgentTimeout:
+                # an agent in its own process (AgentProxy) used all its time
+                # during this move; the engine stopped waiting for it
+                currentPlayer.move_time += time() - start
+                logger.info(f"Player {currentPlayer.name} timed out during its move")
+                endState = EndState.TIMEOUT
+                break
+            except Exception as e:
+                # an exception in the agent loses the game for that agent
+                self.crash_traceback = (
+                    getattr(e, "agent_traceback", None) or traceback.format_exc()
+                )
+                logger.info(
+                    f"Player {currentPlayer.name} raised an exception:\n{self.crash_traceback}"
+                )
+                endState = EndState.CRASH
+                break
             end = time()
 
             assert boardCopy == self.board, "Board was modified, Possible cheating!"
             assert turnCopy == self.turn, "Turn was modified, Possible cheating!"
             assert (
-                playerCopy == self.players
+                playerCopy == self._players_snapshot()
             ), "Players were modified, Possible cheating!"
             assert end > start, "Move time is negative, Possible cheating!"
 
@@ -161,7 +196,7 @@ class Game:
                 f"Player {currentPlayer.name}; Move time: {currentPlayer.move_time}ns"
             )
             logger.info(f"Player {currentPlayer.name}; Move: {self.current_player}{m}")
-            if currentPlayer.move_time > Game.MAXIMUM_TIME:
+            if self.time_limit and currentPlayer.move_time > Game.MAXIMUM_TIME:
                 logger.info(f"Player {currentPlayer.name} timed out")
                 endState = EndState.TIMEOUT
                 break
@@ -180,6 +215,12 @@ class Game:
 
             self.current_player = Colour.opposite(self.current_player)
         return self._end_game(endState)
+
+    def _players_snapshot(self) -> dict:
+        return {
+            colour: (id(p), p.name, hash(p.agent), p.move_time)
+            for colour, p in self.players.items()
+        }
 
     def _make_move(self, m: Move):
         """Performs a valid move on the board, then prints its results."""
@@ -238,6 +279,19 @@ class Game:
                 )
                 winner = self.players[Colour.opposite(self.current_player)].name
 
+            case EndState.CRASH:
+                # the player printed is the winner
+                logger.info(
+                    f"Player {self.players[self.current_player].name} crashed"
+                )
+                logger.info(
+                    f"Player {self.players[Colour.opposite(self.current_player)].name} has won"
+                )
+                winner = self.players[Colour.opposite(self.current_player)].name
+                if getattr(self, "crash_traceback", None):
+                    for line in self.crash_traceback.rstrip().splitlines():
+                        print(f"# {line}", file=self.logDest)
+
             case EndState.TIMEOUT:
                 # the player printed is the winner
                 # last move overcounts
@@ -251,6 +305,14 @@ class Game:
             case _:
                 logger.error("Game ended abnormally")
                 raise Exception("Game ended abnormally")
+
+        # rule checks of agents in their own process (AgentProxy): processes
+        # that ran while the agent was paused, and memory above the limit
+        for p in (self.player1, self.player2):
+            if isinstance(p.agent, AgentProxy):
+                for w in p.agent.finish_checks():
+                    logger.warning(f"Player {p.name}: {w}")
+                    print(f"# WARNING {p.name}: {w}", file=self.logDest)
 
         for p in self.players.values():
             print(f"{p.name},{p.move_time}", file=self.logDest)
@@ -269,6 +331,22 @@ class Game:
             total_turns=self._turn,
             total_time=Game.ns_to_s(total_time),
         )
+
+    @staticmethod
+    def write_failed_load(logDest, *, loser: str, winner: str, reason: str):
+        """Writes the result of a game that did not start because one agent
+        could not be loaded, or its start-up took too long (FAILED_LOAD)."""
+        out = open(logDest, "w") if logDest != sys.stderr else sys.stderr
+        try:
+            for line in reason.rstrip().splitlines():
+                print(f"# {line}", file=out)
+            print(f"{loser},0", file=out)
+            print(f"{winner},0", file=out)
+            print(f"winner,{winner},{EndState.FAILED_LOAD.name}", file=out)
+        finally:
+            if out is not sys.stderr:
+                out.close()
+        logger.info(f"Player {loser} could not be loaded; {winner} wins")
 
     def is_valid_move(self, move: Move, turn: int, board: Board) -> bool:
         """Checks if the move can be made by the given player at the given

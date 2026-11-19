@@ -14,7 +14,9 @@ class MCTSAgent(AgentBase):
             ["./agents/MCTSAgent/mcts-hex"],
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            # stderr is not read by the engine; a PIPE here would fill up and
+            # block the agent, so its debug output goes to the console instead
+            stderr=None,
             text=True,
             bufsize=1
         )
@@ -35,19 +37,8 @@ class MCTSAgent(AgentBase):
             Move: The agent's move
         """
 
-        rows = board.tiles
-        board_strings = []
-        for row in rows:
-            row_string = ""
-            for tile in row:
-                colour = tile.colour
-                if colour is None:
-                    t = "0"
-                else:
-                    t = colour.get_char()
-                row_string += t
-            board_strings.append(row_string)
-        board_string = ",".join(board_strings)
+        # protocol format: rows joined by commas, R/B/0 per tile
+        board_string = board.to_protocol_string()
 
         if opp_move is None:
             command = f"START;;{board_string};{turn};"
@@ -60,6 +51,12 @@ class MCTSAgent(AgentBase):
         self.agent_process.stdin.flush()
 
         response = self.agent_process.stdout.readline().rstrip()
+        if not response:
+            raise RuntimeError(
+                "External agent sent no move (exit code "
+                f"{self.agent_process.poll()}): it may have crashed, or "
+                "written its move without a newline or without flushing stdout."
+            )
         # assuming the response takes the form "x,y" with -1,-1 if the agent wants to make a swap move
         x, y = map(int, response.split(","))
         return Move(x, y)

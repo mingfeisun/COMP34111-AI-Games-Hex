@@ -41,7 +41,7 @@ class ExternalAgent(AgentBase):
                 "-cp",
                 "agents/DefaultAgents",
                 "NaiveAgent",
-                colour.get_char(),
+                colour.to_protocol_char(),
                 "11",
             ],
             stdout=PIPE,
@@ -64,20 +64,8 @@ class ExternalAgent(AgentBase):
         Returns:
             Move: The agent's move
         """
-        # translate the python objects into string representations
-        rows = board.tiles
-        board_strings = []
-        for row in rows:
-            row_string = ""
-            for tile in row:
-                colour = tile.colour
-                if colour is None:
-                    t = "0"
-                else:
-                    t = colour.get_char()
-                row_string += t
-            board_strings.append(row_string)
-        board_string = ",".join(board_strings)
+        # protocol format: rows joined by commas, R/B/0 per tile
+        board_string = board.to_protocol_string()
 
         if opp_move is None:
             # should be turn 1
@@ -92,6 +80,12 @@ class ExternalAgent(AgentBase):
         self.agent_process.stdin.flush()
 
         response = self.agent_process.stdout.readline().rstrip()
+        if not response:
+            raise RuntimeError(
+                "External agent sent no move (exit code "
+                f"{self.agent_process.poll()}): it may have crashed, or "
+                "written its move without a newline or without flushing stdout."
+            )
 
         # assuming the response takes the form "x,y" with -1,-1 if the agent wants to make a swap move
         x, y = response.split(",")
