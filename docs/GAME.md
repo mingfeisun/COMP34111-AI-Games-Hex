@@ -1,9 +1,11 @@
 # Hex Game Engine Documentation
 
 COMP34111 AI & Games. For the Docker commands, see the [README](../README.md).
-Dates and deadlines are on Canvas.
+Before you submit, follow the
+[submission checklist](SUBMISSION-CHECKLIST.md). Dates and deadlines are on
+Canvas.
 
-- [Submission checklist](#submission-checklist)
+- [Submission](#submission)
 - [General Information](#general-information)
 - [Implementation](#implementation)
   - [Overview](#overview) · [Python agent](#python-agent) ·
@@ -16,37 +18,27 @@ Dates and deadlines are on Canvas.
 - [Rules in marked games](#rules-in-marked-games)
 - [How your bot is marked](#how-your-bot-is-marked)
 
-## Submission checklist
+## Submission
 
-This is provided to help you check you have included everything in your
-submission. Make sure you test your submission and read this documentation
-carefully. Pay particular attention to the Docker instructions to ensure that
-your code will run in the test environment.
+Submit one file per group, `GroupXYZ.tar`, where XYZ is your Canvas group
+number with three digits (for example `Group007.tar`). It contains your group
+folder, `GroupXYZ/`, at the top level. Make it from inside the `agents`
+folder, for example `tar -cvf Group007.tar Group007` (this command also works
+in Windows Command Prompt and PowerShell). The maximum size is 1 GB.
 
-Submit one zip file of your group folder, `agents/GroupN/`, where N is your
-Canvas group number. When we unzip it, the top level must be the folder
-`GroupN/`. The maximum size is 1 GB.
+The folder contains your Python agent class (see [Implementation](#implementation)),
+its `cmd.txt` (see [cmd.txt](#cmdtxt)), every other file that your agent
+needs, and, if your agent has compiled parts, their source and a `build.sh`
+(see [Compiled code and build.sh](#compiled-code-and-buildsh)). Do not include
+copies of libraries: use only the packages in the Docker image.
 
-1. A correctly formatted `cmd.txt` file specifying your Python agent (see
-   [cmd.txt](#cmdtxt)).
-2. A Python class implementing `AgentBase` – either your own implementation
-   or the `ExternalAgent` (see [Implementation](#implementation)).
-3. Any other files required to run your agent in the Docker container, such
-   as extra Python files and weights.
-4. If your agent has compiled parts (for example an agent in another
-   language): their source code, the compiled files, and a `build.sh` that
-   builds them again (see [Compiled code and build.sh](#compiled-code-and-buildsh)).
-5. No copies of libraries: use only the packages in the Docker image.
+**This assessment is AI prohibited:** all submissions must be written by
+humans (see the coursework brief).
 
-Before you submit, run this inside the container, from the repository root:
-
-```bash
-python3 check_submission.py N
-```
-
-It checks your folder and `cmd.txt` as the marking scripts do. Then it plays
-three games with the real time limits: your agent as player 1, your agent as
-player 2, and your agent as player 1 against an opponent that swaps on turn 2.
+Before you submit, follow the [submission checklist](SUBMISSION-CHECKLIST.md):
+it tells you how to test your bot in the container with
+`check_submission.py`, and how to test your `.tar` file on a fresh copy of
+the repository.
 
 **IMPORTANT:** We do not accept fixes for broken bots after the deadline. However,
 we will test your bot for you before the deadline. If you submit **before 14 December 14:00**
@@ -92,8 +84,11 @@ as you like, but we will not test any submissions after 14 December 14:00.
   - Illegal move (`BAD_MOVE`) – one agent tries to occupy an already occupied
     tile, plays a move outside the board, swaps when it is not turn 2, or does
     not return a `Move` object. The opposing agent wins.
-  - Crash (`CRASH`) – one agent's `make_move` raises an exception. The
-    opposing agent wins.
+  - Crash (`CRASH`) – one agent's `make_move` raises an exception, or its
+    process stops. The opposing agent wins.
+  - Failed load (`FAILED_LOAD`) – one agent cannot be imported, its
+    `__init__` raises an exception, or its start-up takes more than 3
+    minutes. The opposing agent wins.
 
 ## Implementation
 
@@ -116,6 +111,10 @@ When the game starts, the engine will call the `__init__` method in your
 Python agent, which will tell you which colour your agent will be playing as
 (`Colour.RED` or `Colour.BLUE`) and allow you to perform any setup steps.
 Call `super().__init__(colour)`.
+
+Your agent runs in its own process, so it cannot see the engine's or the
+opponent's Python objects. Text that your agent prints goes to the terminal
+and does not affect the game.
 
 When it is your turn to move, the game engine will call the `make_move`
 method, which should always return a `Move` object. If the method does not
@@ -166,7 +165,9 @@ The provided example is equivalent to running the command
 agent has been assigned the colour Blue. The `-cp agents/DefaultAgents` part
 of the command specifies the location of the compiled `NaiveAgent.class`
 file. If you copy the class into your group folder, change this to
-`agents/GroupN`, and name the class in your `cmd.txt`.
+`agents/GroupXYZ`, and name the class in your `cmd.txt`. A program that
+your agent starts is paused together with your agent during the opponent's
+turn (see [Rules in marked games](#rules-in-marked-games)).
 
 If using the provided `ExternalAgent` code, when the game is started your
 code will be launched using the command specified in the `__init__` method.
@@ -233,10 +234,10 @@ module, or Java `.class` files), you must submit:
 
 1. the source code of every compiled part;
 2. the compiled files, at the paths your agent uses them;
-3. a script `agents/GroupN/build.sh` that builds every compiled file again
+3. a script `agents/GroupXYZ/build.sh` that builds every compiled file again
    from the source, at the same paths.
 
-We run `bash agents/GroupN/build.sh` from the repository root, in the build
+We run `bash agents/GroupXYZ/build.sh` from the repository root, in the build
 image (`docker build --target build -t hex-build .`), on a copy of your
 folder from which all compiled files have been removed. The build may use the
 network (for example to download Rust crates or Go modules). Limits for builds are:
@@ -268,17 +269,17 @@ Advice:
 - Go: build with `CGO_ENABLED=0` to get a static program. Rust: build with
   `--target x86_64-unknown-linux-musl` to get a static program.
 - Java: `javac --release 21`.
-- Test your script before you submit, on a fresh copy of the repository:
-  `docker run --rm -v "$(pwd)":/home/hex hex-build bash agents/GroupN/build.sh`
-  (in PowerShell use `"${PWD}:/home/hex"`, in Command Prompt `"%cd%:/home/hex"`).
+- Test your `build.sh` on a fresh copy of the repository, after you delete
+  the compiled files: see step 6 of the
+  [submission checklist](SUBMISSION-CHECKLIST.md#6-make-the-tar-file-and-test-it-on-a-fresh-copy).
 
 Example `build.sh` for a C++ program and a Java agent:
 
 ```bash
 #!/bin/bash
 set -e
-g++ -O2 -march=x86-64-v3 -o agents/Group7/engine agents/Group7/src/*.cpp
-javac --release 21 -d agents/Group7 agents/Group7/MyAgent.java
+g++ -O2 -march=x86-64-v3 -o agents/Group007/engine agents/Group007/src/*.cpp
+javac --release 21 -d agents/Group007 agents/Group007/MyAgent.java
 ```
 
 ## Running the game
@@ -295,13 +296,14 @@ Example commands:
 | Command | Explanation |
 | --- | --- |
 | `python3 Hex.py` | Run the game engine with two default agents |
-| `python3 Hex.py -p1 "agents.Group0.MyAgent MyGoodAgent"` | Run the game engine with player 1 as the class `MyGoodAgent` in the file `agents/Group0/MyAgent.py`, and player 2 as default agent |
-| `python3 Hex.py -p2 "agents.Group0.MyAgent MyGoodAgent"` | Run the game engine with player 2 as the class `MyGoodAgent` in the file `agents/Group0/MyAgent.py`, and player 1 as default agent |
-| `python3 Hex.py -p1 "agents.Group0.MyOtherAgent MyBadAgent" -p2 "agents.Group0.MyAgent MyGoodAgent"` | Run the game engine with player 1 as the class `MyBadAgent` from the file `agents/Group0/MyOtherAgent.py` and player 2 as the class `MyGoodAgent` in the file `agents/Group0/MyAgent.py` |
+| `python3 Hex.py -p1 "agents.Group007.MyAgent MyGoodAgent"` | Run the game engine with player 1 as the class `MyGoodAgent` in the file `agents/Group007/MyAgent.py`, and player 2 as default agent |
+| `python3 Hex.py -p2 "agents.Group007.MyAgent MyGoodAgent"` | Run the game engine with player 2 as the class `MyGoodAgent` in the file `agents/Group007/MyAgent.py`, and player 1 as default agent |
+| `python3 Hex.py -p1 "agents.Group007.MyOtherAgent MyBadAgent" -p2 "agents.Group007.MyAgent MyGoodAgent"` | Run the game engine with player 1 as the class `MyBadAgent` from the file `agents/Group007/MyOtherAgent.py` and player 2 as the class `MyGoodAgent` in the file `agents/Group007/MyAgent.py` |
 
 The first command will play a game between two Naive agents, located at
-`agents/DefaultAgents/NaiveAgent.py` with the class name `NaiveAgent`. By
-default the game log will also be printed to stderr. The details of the log
+`agents/DefaultAgents/NaiveAgent.py` with the class name `NaiveAgent`. Each
+agent runs in its own process and is paused during the opponent's turn, as in
+marked games. By default the game log will also be printed to stderr. The details of the log
 formatting are explained in [Log format](#log-format).
 
 To see all the available options and arguments of the engine use
@@ -311,37 +313,27 @@ used when specifying arguments which contain spaces, i.e. the `-p1` and
 
 | Argument | Usage |
 | --- | --- |
-| `-p1`, `--player1` | Specify the player 1 agent. Format: `agents.GroupX.AgentFile AgentClassName`, e.g. `"agents.Group0.NaiveAgent NaiveAgent"` |
+| `-p1`, `--player1` | Specify the player 1 agent. Format: `agents.GroupXYZ.AgentFile AgentClassName`, e.g. `"agents.Group007.NaiveAgent NaiveAgent"` |
 | `-p1Name`, `--player1Name` | Specify the player 1 name (default `Red`) |
 | `-p2`, `--player2` | Specify the player 2 agent, in the same format |
 | `-p2Name`, `--player2Name` | Specify the player 2 name (default `Blue`) |
 | `-v`, `--verbose` | Enable verbose logging |
 | `-b`, `--board_size` | Specify the board size\*, e.g. `-b 11` |
 | `-l`, `--log` | Save the move history to a log file. If the flag is present, the result is saved to `game.log`; if a filename is provided, to that file. If the flag is not present, the log is printed to stderr. |
+| `--seed` | Random seed for the game (player 1 gets the seed, player 2 the seed + 1). Without it, the engine chooses a seed and prints it, so that you can repeat a game. |
+| `--debug` | Debug mode: run both agents inside the engine's process, as in the 2025 engine, so that you can use a debugger (`pdb`, `breakpoint()`) in your agent. Agents are not paused, and there are no time limits (time spent in the debugger counts on your clock, but your agent does not lose by `TIMEOUT`). Marked games do not use this. |
 
 \* Your agent will be tested on an 11x11 board; this option is provided for
 development.
 
 #### Docker
 
-We will run each game within the Docker image built from the `Dockerfile` in
-the repository. This means you can test your agent in the environment it will
-be tested in, to ensure compatibility. The commands to build the image and
-run the container (for Linux, macOS, Windows PowerShell and Command Prompt)
-are in the [README](../README.md). In short:
-
-```bash
-docker build -t hex .
-docker run -it --cpuset-cpus=0-7 --memory=16g --name hex -v "$(pwd)":/home/hex hex bash
-```
-
-The container starts in `/home/hex`, which is your copy of the repository:
-any changes made there are also changes on your computer. After you are in
-the container, all the steps from [From Terminal](#from-terminal) apply. To
-exit the container, type `exit`. To enter it again, use
-`docker start -i hex`.
-
-The limits in marked games are in [Rules in marked games](#rules-in-marked-games).
+We run each game in the Docker image built from the `Dockerfile` in the
+repository, so test your agent in this image. The commands to build the image
+and run the container (for Linux, macOS, Windows PowerShell and Command
+Prompt) are in the [README](../README.md). In the container, all the steps
+from [From Terminal](#from-terminal) apply. The limits in marked games are in
+[Rules in marked games](#rules-in-marked-games).
 
 ### Log format
 
@@ -367,8 +359,9 @@ swap move (and is now Red)".
 
 The last lines show the total time spent by the player on the red side, then
 the blue side, and lastly who the winner is and what the end state is. If a
-player crashed, the lines before the totals start with `#` and show the
-error.
+player crashed or could not be loaded, the lines before the totals start with
+`#` and show the error. Lines that start with `# WARNING` show a rule check
+(see [Rules in marked games](#rules-in-marked-games)).
 
 As mentioned, by default the engine prints the log to stderr. Using `-l`
 writes the log to `game.log` in the directory where you start the engine.
@@ -380,12 +373,12 @@ providing a file path, for example `-l ./test/test.log`.
 You will specify the path to your agent file using a file named `cmd.txt`,
 which will be included within your group folder.
 
-For example, if your agent is located at `agents/Group7/NaiveAgent.py` and
+For example, if your agent is located at `agents/Group007/NaiveAgent.py` and
 the class name is `VeryNaiveAgent`, then the content of the `cmd.txt` should
 be the following:
 
 ```text
-agents.Group7.NaiveAgent VeryNaiveAgent
+agents.Group007.NaiveAgent VeryNaiveAgent
 ```
 
 Note that this is only the location and name of your agent class, and not
@@ -401,13 +394,13 @@ the format needs to be precise:
 - There should be only one white space between the agent path and the agent
   class name, and only one line.
 - Save it as plain text, UTF-8, without a byte order mark (BOM).
-- The `GroupN` in the line must match your folder name exactly, including the
-  capital G.
+- The `GroupXYZ` in the line must match your folder name exactly, including
+  the capital G and the three digits.
 - If you wrote your agent in an alternative programming language, specify
   the Python agent in `cmd.txt`; you will launch your code from within this
   Python class as explained in [Alternative languages](#alternative-languages).
 - Use full import paths in your code, for example
-  `from agents.Group7.utils import f`. A plain `from utils import f` fails.
+  `from agents.Group007.utils import f`. A plain `from utils import f` fails.
 - Open your files with paths built from your file's location, for example
   `os.path.join(os.path.dirname(__file__), "weights.pt")`. Games run from the
   repository root.
@@ -420,16 +413,26 @@ the format needs to be precise:
 - **Hardware:** your agent gets 8 CPUs (logical CPUs, as with Docker's
   `--cpuset-cpus=0-7`) and 8 GB of memory. There is no GPU available.
 - **Pausing:** your agent is paused during the opponent's turn. Its threads
-  and child processes stop too, and continue in your next turn. 
+  and child processes stop too, and continue in your next turn. `Hex.py` and
+  `check_submission.py` do the same. Do not start processes that leave your
+  agent's process group (for example with `setsid` or `start_new_session`).
 - **Fresh folder:** each game starts from a fresh copy of your folder. Files
   that your agent writes during a game are not kept.
-- **Random seed:** your agent can set its own random seed. If it does not,
-  the marking engine sets one for each game (`Hex.py` does not).
+- **Random seed:** the engine sets a seed for each agent in each game. It
+  seeds Python's `random` and NumPy's global generator before your module is
+  imported, and PyTorch (`torch.manual_seed`) after your module is imported,
+  if your module imports PyTorch. A seed that your agent sets in `__init__`
+  or later replaces it. Generators that you make yourself (for example
+  `numpy.random.default_rng()`) are not seeded by the engine.
+- **Rule checks:** the engine records any process of your agent that uses
+  CPU time while your agent is paused, and your agent's peak memory.
+  `check_submission.py` shows these warnings. If a marked game shows a rule
+  break, we review your games by hand and can deduct marks.
 - **No network:** there is no network access during games.
 - **Fair play:** do not read or change the game engine, the opponent or the
   timer. We treat this as academic misconduct.
 - **Only your folder:** we use our own copy of everything outside
-  `agents/GroupN/`, so changes to `src/`, `Hex.py` or other folders are lost.
+  `agents/GroupXYZ/`, so changes to `src/`, `Hex.py` or other folders are lost.
 
 ## How your bot is marked
 

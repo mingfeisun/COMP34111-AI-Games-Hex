@@ -1,9 +1,9 @@
-"""Check a group's bot before you submit it.
+"""Use this script to check your code before you submit it.
 
 Usage (from the repository root, inside the Docker container):
 
-    python3 check_submission.py N          # checks agents/GroupN/
-    python3 check_submission.py GroupN     # the same
+    python3 check_submission.py 7          # checks agents/Group007/
+    python3 check_submission.py Group007   # the same
 
 It checks the folder and cmd.txt in the same way as the marking scripts, then
 plays three games with the real time limits:
@@ -13,10 +13,13 @@ plays three games with the real time limits:
     3. your bot as player 1        against ValidAgent, which always swaps on
        turn 2 (your bot gets Move(-1, -1) on turn 3 and is then Blue)
 
-Passing these checks does not mean that your bot is strong; it means that it
-loads, plays legal moves, handles a swap and stays inside the limits.
-Note: this version runs games with Hex.py. The marking runner also pauses each
-bot during the opponent's turn; this script will be updated to use it.
+The games run with Hex.py. Each bot runs in its own process and is paused during 
+the opponent's turn. The script also shows if your bot tries to use more resources 
+than allowed, or tries to think while it is not its turn. 
+
+Passing these checks does not mean that your bot is strong. It means that it
+loads, plays legal moves, handles a swap and stays inside the limits. In other words,
+it fulfills the minimum requirements for a working submission.
 """
 
 import os
@@ -26,9 +29,9 @@ import sys
 import tempfile
 import time
 
-MAX_ZIP_BYTES = 1 * 1024**3          # 1 GB (decision D12)
-MOVE_TIME_LIMIT_S = 5 * 60           # per player per game (D11)
-STARTUP_LIMIT_S = 3 * 60             # agent __init__ (D11)
+MAX_SIZE_BYTES = 1 * 1024**3         # 1 GB for GroupXYZ.tar
+MOVE_TIME_LIMIT_S = 5 * 60           # 5 minute chess clock per player per game
+STARTUP_LIMIT_S = 3 * 60             # agent __init__ gets 3 minutes
 GAME_WALL_LIMIT_S = 2 * (MOVE_TIME_LIMIT_S + STARTUP_LIMIT_S) + 30
 NAIVE = "agents.DefaultAgents.NaiveAgent NaiveAgent"
 SWAPPER = "agents.TestAgents.ValidAgent ValidAgent"
@@ -64,16 +67,17 @@ def folder_size(path):
 def check_folder(group):
     print(f"\n[1] Folder agents/{group}/")
     path = os.path.join("agents", group)
-    if not re.fullmatch(r"Group\d+", group):
-        fail(f"folder name '{group}' must be 'Group' + your Canvas group number, e.g. Group7")
+    if not re.fullmatch(r"Group\d{3}", group):
+        fail(f"folder name '{group}' must be 'Group' + your Canvas group number "
+             "with three digits, e.g. Group007")
     if not os.path.isdir(path):
         fail(f"{path} does not exist (run this script from the repository root)")
         return None
     size = folder_size(path)
-    if size > MAX_ZIP_BYTES:
-        fail(f"folder is {size / 2**20:.0f} MB; the maximum is {MAX_ZIP_BYTES / 2**20:.0f} MB")
+    if size > MAX_SIZE_BYTES:
+        fail(f"folder is {size / 2**20:.0f} MB; the maximum is {MAX_SIZE_BYTES / 2**20:.0f} MB")
     else:
-        ok(f"size {size / 2**20:.1f} MB (maximum {MAX_ZIP_BYTES / 2**20:.0f} MB)")
+        ok(f"size {size / 2**20:.1f} MB (maximum {MAX_SIZE_BYTES / 2**20:.0f} MB)")
     bundled = []
     for root, dirs, _files in os.walk(path):
         for d in dirs:
@@ -175,6 +179,10 @@ def play(p1, p2, bot_name, title):
         times = {l.split(",")[0]: int(float(l.split(",")[1])) for l in lines
                  if l.split(",")[0] in ("Bot", "Opponent") and len(l.split(",")) == 2}
         bot_s = times.get("Bot", 0) / 1e9
+        for l in lines:
+            if l.startswith("# WARNING Bot:"):
+                warn("rule check: " + l[len("# WARNING Bot:"):].strip()
+                     + " (see 'Rules in marked games' in docs/GAME.md)")
         if winner != "Bot" and state != "WIN":
             fail(f"your bot lost by {state}")
             crash = [l[2:] for l in lines if l.startswith("# ")]
@@ -193,7 +201,7 @@ def main():
         print(__doc__)
         sys.exit(2)
     arg = sys.argv[1].strip().rstrip("/\\")
-    group = os.path.basename(arg) if not arg.isdigit() else f"Group{arg}"
+    group = os.path.basename(arg) if not arg.isdigit() else f"Group{int(arg):03d}"
     if not os.path.isfile("Hex.py"):
         print("Run this script from the repository root.")
         sys.exit(2)

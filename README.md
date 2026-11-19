@@ -39,7 +39,7 @@ docker build --target build -t hex-build .
 
 If you would like to use a different language or toolchain, speak to the course staff. 
 We will try to help, but cannot guarantee we are able to accommodate all requests. 
-See docs/GAME.md for more detail.
+See [GAME.md](docs/GAME.md) for more detail.
 
 ## Run the container
 
@@ -79,7 +79,7 @@ By default, two `agents/DefaultAgents/NaiveAgent.py` agents play each other.
 To choose the agents, give the module and class name of each player:
 
 ```bash
-python3 Hex.py -p1 "agents.Group7.MyAgent MyAgent" -p2 "agents.DefaultAgents.NaiveAgent NaiveAgent"
+python3 Hex.py -p1 "agents.Group007.MyAgent MyAgent" -p2 "agents.DefaultAgents.NaiveAgent NaiveAgent"
 ```
 
 `python3 Hex.py --help` shows all options.
@@ -87,7 +87,7 @@ python3 Hex.py -p1 "agents.Group7.MyAgent MyAgent" -p2 "agents.DefaultAgents.Nai
 ## Check your submission
 
 ```bash
-python3 check_submission.py 7      # checks agents/Group7/
+python3 check_submission.py Group007      # checks agents/Group007/
 ```
 
 ## Run the tests
