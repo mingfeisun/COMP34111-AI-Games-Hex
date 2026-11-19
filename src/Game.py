@@ -332,6 +332,22 @@ class Game:
             total_time=Game.ns_to_s(total_time),
         )
 
+    @staticmethod
+    def write_failed_load(logDest, *, loser: str, winner: str, reason: str):
+        """Writes the result of a game that did not start because one agent
+        could not be loaded, or its start-up took too long (FAILED_LOAD)."""
+        out = open(logDest, "w") if logDest != sys.stderr else sys.stderr
+        try:
+            for line in reason.rstrip().splitlines():
+                print(f"# {line}", file=out)
+            print(f"{loser},0", file=out)
+            print(f"{winner},0", file=out)
+            print(f"winner,{winner},{EndState.FAILED_LOAD.name}", file=out)
+        finally:
+            if out is not sys.stderr:
+                out.close()
+        logger.info(f"Player {loser} could not be loaded; {winner} wins")
+
     def is_valid_move(self, move: Move, turn: int, board: Board) -> bool:
         """Checks if the move can be made by the given player at the given
         position.
