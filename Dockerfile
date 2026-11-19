@@ -80,7 +80,6 @@ RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal \
 
 RUN (go version; rustc --version; cmake --version | head -1) > /etc/hex-build-tools.txt
 
-# You can use anything in statically linked binaries in x86-64 Linux.
 # Speak to the course staff if you want to use a different language or toolchain.
 # We cannot guarantee that your submission will run if you use a different toolchain.
 

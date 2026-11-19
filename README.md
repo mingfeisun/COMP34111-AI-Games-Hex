@@ -37,9 +37,9 @@ use to rebuild your code (see docs/GAME.md):
 docker build --target build -t hex-build .
 ```
 
-You can use anything in statically linked binaries in x86-64 Linux.
 If you would like to use a different language or toolchain, speak to the course staff. 
 We will try to help, but cannot guarantee we are able to accommodate all requests. 
+See docs/GAME.md for more detail.
 
 ## Run the container
 

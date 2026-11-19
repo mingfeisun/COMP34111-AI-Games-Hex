@@ -51,7 +51,7 @@ player 2, and your agent as player 1 against an opponent that swaps on turn 2.
 **IMPORTANT:** We do not accept fixes for broken bots after the deadline. However,
 we will test your bot for you before the deadline. If you submit **before 14 December 14:00**
 we will tell you if your bot runs within the time limit, and if we can rebuild its 
-compiled parts with its \texttt{build.sh}. We will not tell you its speed or 
+compiled parts with its `build.sh`. We will not tell you its speed or 
 performance. You may change your submission after this and resubmit as many times
 as you like, but we will not test any submissions after 14 December 14:00. 
 **It is your responsibility to ensure your bot runs and builds correctly ahead of the deadline.**
