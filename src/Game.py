@@ -7,6 +7,7 @@ from time import perf_counter_ns as time
 from typing import TextIO
 
 from src.AgentBase import AgentBase
+from src.AgentProxy import AgentProxy, AgentTimeout
 from src.Board import Board
 from src.Colour import Colour
 from src.EndState import EndState
@@ -68,7 +69,11 @@ class Game:
         logDest: str | TextIO = sys.stderr,
         verbose: bool = False,
         silent: bool = False,
+        time_limit: bool = True,
     ):
+        """time_limit=False: do not end the game when a player uses more than
+        MAXIMUM_TIME (debug mode); the time is still measured."""
+        self.time_limit = time_limit
         self._turn = 0  # current turn count
         self._board = Board(board_size)
         self.current_player = Colour.RED  # current player
@@ -116,6 +121,11 @@ class Game:
             self._end_game(None)
             print(f"Exception raised: {e}")
         finally:
+            # agents in their own process (AgentProxy): kill them and every
+            # process they started
+            for p in (self.player1, self.player2):
+                if isinstance(p.agent, AgentProxy):
+                    p.agent.close()
             if self.logDest != sys.stderr:
                 self.logDest.close()
 
@@ -155,9 +165,18 @@ class Game:
             start = time()
             try:
                 m = playerAgent.make_move(self.turn, playerBoard, opponentMove)
-            except Exception:
+            except AgentTimeout:
+                # an agent in its own process (AgentProxy) used all its time
+                # during this move; the engine stopped waiting for it
+                currentPlayer.move_time += time() - start
+                logger.info(f"Player {currentPlayer.name} timed out during its move")
+                endState = EndState.TIMEOUT
+                break
+            except Exception as e:
                 # an exception in the agent loses the game for that agent
-                self.crash_traceback = traceback.format_exc()
+                self.crash_traceback = (
+                    getattr(e, "agent_traceback", None) or traceback.format_exc()
+                )
                 logger.info(
                     f"Player {currentPlayer.name} raised an exception:\n{self.crash_traceback}"
                 )
@@ -177,7 +196,7 @@ class Game:
                 f"Player {currentPlayer.name}; Move time: {currentPlayer.move_time}ns"
             )
             logger.info(f"Player {currentPlayer.name}; Move: {self.current_player}{m}")
-            if currentPlayer.move_time > Game.MAXIMUM_TIME:
+            if self.time_limit and currentPlayer.move_time > Game.MAXIMUM_TIME:
                 logger.info(f"Player {currentPlayer.name} timed out")
                 endState = EndState.TIMEOUT
                 break
@@ -286,6 +305,14 @@ class Game:
             case _:
                 logger.error("Game ended abnormally")
                 raise Exception("Game ended abnormally")
+
+        # rule checks of agents in their own process (AgentProxy): processes
+        # that ran while the agent was paused, and memory above the limit
+        for p in (self.player1, self.player2):
+            if isinstance(p.agent, AgentProxy):
+                for w in p.agent.finish_checks():
+                    logger.warning(f"Player {p.name}: {w}")
+                    print(f"# WARNING {p.name}: {w}", file=self.logDest)
 
         for p in self.players.values():
             print(f"{p.name},{p.move_time}", file=self.logDest)
