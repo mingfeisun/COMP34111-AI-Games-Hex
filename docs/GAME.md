@@ -1,35 +1,42 @@
-# Hex game engine: documentation
+# Hex Game Engine Documentation
 
-COMP34111 AI and Games. This page tells you how the game engine works, how to
-write your bot, and how we run and mark it. For Docker commands, see the
-[README](../README.md). Dates and deadlines are on Canvas.
+COMP34111 AI & Games. For the Docker commands, see the [README](../README.md).
+Dates and deadlines are on Canvas.
 
 - [Submission checklist](#submission-checklist)
-- [The game](#the-game)
-- [Write a bot in Python](#write-a-bot-in-python)
-- [Write a bot in another language](#write-a-bot-in-another-language)
-- [Run games](#run-games)
-- [Game log](#game-log)
-- [cmd.txt](#cmdtxt)
+- [General Information](#general-information)
+- [Implementation](#implementation)
+  - [Overview](#overview) · [Python agent](#python-agent) ·
+    [Alternative languages](#alternative-languages) ·
+    [Message format](#message-format) ·
+    [Compiled code and build.sh](#compiled-code-and-buildsh)
+- [Running the game](#running-the-game)
+  - [From Terminal](#from-terminal) · [Docker](#docker) ·
+    [Log format](#log-format) · [cmd.txt](#cmdtxt)
 - [Rules in marked games](#rules-in-marked-games)
 - [How your bot is marked](#how-your-bot-is-marked)
 
 ## Submission checklist
 
+This is provided to help you check you have included everything in your
+submission. Make sure you test your submission and read this documentation
+carefully. Pay particular attention to the Docker instructions to ensure that
+your code will run in the test environment.
+
 Submit one zip file of your group folder, `agents/GroupN/`, where N is your
 Canvas group number. When we unzip it, the top level must be the folder
 `GroupN/`. The maximum size is 1 GB.
 
-1. A correct `cmd.txt` in `agents/GroupN/` (see [cmd.txt](#cmdtxt)).
-2. A Python class that inherits from `AgentBase`: your own bot, or a class
-   that starts your program in another language (see
-   [Write a bot in another language](#write-a-bot-in-another-language)).
-3. All other files that your bot needs: Python modules, weights, the source
-   code and the compiled files of a program in another language. We do not
-   compile your code. Compile it inside the Docker container, and include both
-   the source and the compiled files.
-4. Do not put copies of libraries in your folder. Use only the packages in
-   the Docker image.
+1. A correctly formatted `cmd.txt` file specifying your Python agent (see
+   [cmd.txt](#cmdtxt)).
+2. A Python class implementing `AgentBase` – either your own implementation
+   or the `ExternalAgent` (see [Implementation](#implementation)).
+3. Any other files required to run your agent in the Docker container, such
+   as extra Python files and weights.
+4. If your agent has compiled parts (for example an agent in another
+   language): their source code, the compiled files, and a `build.sh` that
+   builds them again (see [Compiled code and build.sh](#compiled-code-and-buildsh)).
+5. No copies of libraries: use only the packages in the Docker image.
 
 Before you submit, run this inside the container, from the repository root:
 
@@ -38,75 +45,114 @@ python3 check_submission.py N
 ```
 
 It checks your folder and `cmd.txt` as the marking scripts do. Then it plays
-three games with the real time limits: your bot as player 1, your bot as
-player 2, and your bot as player 1 against an opponent that swaps on turn 2.
-We do not accept fixes after the deadline, so submit early for the dry run if
-you want us to check that your bot runs on our machine.
+three games with the real time limits: your agent as player 1, your agent as
+player 2, and your agent as player 1 against an opponent that swaps on turn 2.
 
-## The game
+**IMPORTANT:** We do not accept fixes for broken bots after the deadline. However,
+we will test your bot for you before the deadline. If you submit **before 14 December 14:00**
+we will tell you if your bot runs within the time limit, and if we can rebuild its 
+compiled parts with its \texttt{build.sh}. We will not tell you its speed or 
+performance. You may change your submission after this and resubmit as many times
+as you like, but we will not test any submissions after 14 December 14:00. 
+**It is your responsibility to ensure your bot runs and builds correctly ahead of the deadline.**
 
-- The rules of Hex: [Hex (board game)](https://en.wikipedia.org/wiki/Hex_(board_game)).
-- The board has 11 × 11 tiles. A tile has the coordinates `(x, y)`:
-  `x` is the **row** (0 = top) and `y` is the **column** (0 = left). In code,
-  the tile is `board.tiles[x][y]`, and a move to it is `Move(x, y)`.
-- Each row is drawn half a tile to the right of the row above it. So the
-  tile `(x, y)` has six neighbours: `(x, y-1)` and `(x, y+1)` in the same row,
-  `(x-1, y)` and `(x-1, y+1)` in the row above, and `(x+1, y-1)` and
-  `(x+1, y)` in the row below. Example: the neighbours `N` of the tile
-  `X = (1, 2)`:
+## General Information
 
-  ```text
-  y:      0   1   2   3   4
-  x=0      .   .   N   N   .
-  x=1        .   N   X   N   .
-  x=2          .   N   N   .   .
-  ```
+- The rules for Hex can be found
+  [here](https://en.wikipedia.org/wiki/Hex_(board_game)).
+- The board is 11x11, and it is represented by a 0-indexed two-dimensional
+  matrix with rows that fall diagonally to the right. The tile `(x, y)` is in
+  row `x` (0 = top) and column `y` (0 = left): in code it is
+  `board.tiles[x][y]`, and a move to it is `Move(x, y)`. The tile `(x, y)` has
+  the neighbours `(x, y-1)` and `(x, y+1)` in the same row, `(x-1, y)` and
+  `(x-1, y+1)` in the row above, and `(x+1, y-1)` and `(x+1, y)` in the row
+  below. Below you can see the neighbours of tile X = (1, 2) marked as N:
 
-- Red connects the top row (x = 0) to the bottom row (x = 10). Blue connects
-  the left column (y = 0) to the right column (y = 10).
-- Player 1 is Red and moves first (turn 1). Player 2 is Blue.
-- Swap (pie rule): on turn 2 only, player 2 can return `Move(-1, -1)` instead
-  of a normal move. Then the two players change colours: player 2 becomes
-  Red and owns the stone that is already on the board, and player 1 becomes
-  Blue and plays turn 3. The engine changes the `colour` property of both
-  agents. A swap on any other turn is an illegal move.
-- A game ends in one of these ways:
+  | row x \ column y | 0 | 1 | 2 | 3 | 4 |
+  | --- | --- | --- | --- | --- | --- |
+  | 0 | 0 | 0 | N | N | 0 |
+  | 1 | 0 | N | X | N | 0 |
+  | 2 | 0 | N | N | 0 | 0 |
 
-  | End | Meaning | Winner |
-  | --- | --- | --- |
-  | `WIN` | A player connects its two sides of the board. | That player |
-  | `BAD_MOVE` | A player plays on a tile that is not empty, plays outside the board, swaps when it is not turn 2, or returns something that is not a `Move`. | The opponent |
-  | `TIMEOUT` | A player uses more than its total time (see [Rules in marked games](#rules-in-marked-games)). | The opponent |
-  | `CRASH` | A player's `make_move` raises an exception. | The opponent |
+- Red aims to connect the top and bottom sides (rows 0 and 10), while Blue
+  connects the left and right sides (columns 0 and 10). Red (player 1) moves
+  first.
+- The pie rule is implemented: on turn 2 only, player 2 (Blue) can swap
+  instead of making a normal move. Then the players change colours: player 2
+  becomes Red and owns the stone on the board, and player 1 becomes Blue and
+  plays turn 3.
+- Each agent has a maximum total of 5 minutes per match for all its moves,
+  and 3 minutes for its start-up (`__init__`).
+- Your agent's performance will be evaluated by a combination of win rate
+  (75%) and move speed (25%) (see [How your bot is marked](#how-your-bot-is-marked)).
+- Possible outcome of a match:
+  - Win (`WIN`) – one agent has connected their sides of the board.
+  - Timeout (`TIMEOUT`) – one agent has used up all the time allocated to it
+    (5 minutes). The opposing agent wins.
+  - Illegal move (`BAD_MOVE`) – one agent tries to occupy an already occupied
+    tile, plays a move outside the board, swaps when it is not turn 2, or does
+    not return a `Move` object. The opposing agent wins.
+  - Crash (`CRASH`) – one agent's `make_move` raises an exception. The
+    opposing agent wins.
 
-## Write a bot in Python
+## Implementation
 
-Your bot is a class that inherits from `AgentBase` (in `src/AgentBase.py`).
-`agents/DefaultAgents/NaiveAgent.py` is a simple example: it plays a random
-empty tile, and swaps on turn 2 half of the time.
+### Overview
 
-- `__init__(self, colour)`: the engine calls this once when the game starts,
-  with your colour (`Colour.RED` or `Colour.BLUE`). Do your set-up here, for
-  example load weights. Call `super().__init__(colour)`.
-- `make_move(self, turn, board, opp_move)`: the engine calls this on each of
-  your turns. It must return a `Move` (from `src/Move.py`).
-  - `turn`: the turn number of the move you are about to make, from 1.
-  - `board`: a copy of the current `Board`. `board.tiles` is a list of rows;
-    each `Tile` has the properties `x`, `y` and `colour` (`None` if empty).
-  - `opp_move`: the opponent's last move. It is `None` on turn 1, and
-    `Move(-1, -1)` if the opponent swapped. After a swap, your `self.colour`
-    is already changed.
-- To play a tile, return `Move(x, y)`. To swap, return `Move(-1, -1)`.
+You have the option to implement your agent in Python, or in an alternative
+programming language of your choice. You can either implement the provided
+agent template class in Python, or use the provided
+`agents/DefaultAgents/ExternalAgent.py` class to launch your agent as an
+external process. More detailed instructions on how to do this are provided
+later, with an example implementation in Java.
 
-## Write a bot in another language
+### Python agent
 
-`agents/DefaultAgents/ExternalAgent.py` is a Python agent class that starts a
-program as a separate process and talks to it through stdin and stdout.
-`agents/DefaultAgents/NaiveAgent.java` is an example program in Java. You can
-use and change this code as you like; the interface is not part of the
-assessment.
+An agent template is provided at `agents/DefaultAgents/NaiveAgent.py`. The
+class has two methods, `__init__` and `make_move`. (`NaiveAgent` plays a
+random empty tile, and swaps on turn 2 half of the time.)
 
-To start your own program, change the command in `ExternalAgent.__init__`:
+When the game starts, the engine will call the `__init__` method in your
+Python agent, which will tell you which colour your agent will be playing as
+(`Colour.RED` or `Colour.BLUE`) and allow you to perform any setup steps.
+Call `super().__init__(colour)`.
+
+When it is your turn to move, the game engine will call the `make_move`
+method, which should always return a `Move` object. If the method does not
+return a valid `Move` object, the game engine will classify the move as
+illegal, and your agent will lose the game immediately. When the `make_move`
+method is called, it gets the turn number (from 1), a copy of the `Board`
+specifying the current game state, and a `Move` object specifying the
+opponent's move (`None` on turn 1). The `Board` object contains a 2D list of
+`Tile` objects, `board.tiles`. `Tile` objects have `x`, `y` and `colour`
+properties (`colour` is `None` for an empty tile); `x` and `y` match their
+position in `board.tiles`.
+
+The `Move` object can be used to make a swap move or a normal move. To make a
+swap move, the `Move` object is created with the parameters `(-1, -1)`. To
+make a normal move, the `Move` object is created with the parameters `(x, y)`,
+where `x` and `y` are the coordinates the tile will be placed at. If the
+opponent swapped, `opp_move` is `Move(-1, -1)`, and the engine has already
+changed your `colour` property.
+
+The agent's only implementation requirement is it must be a class that
+inherits the `AgentBase` class (located at `src/AgentBase.py`). `AgentBase`
+is an abstract base class that ensures you implement both the `__init__` and
+`make_move` methods yourself, and provides all the necessary methods for
+running a game.
+
+### Alternative languages
+
+The provided `agents/DefaultAgents/ExternalAgent.py` class contains code to
+launch an external Java process and communicate with it via stdin and stdout
+to play the game. There is a corresponding
+`agents/DefaultAgents/NaiveAgent.java` file which demonstrates the
+communication for a Java agent implementation. You are free to use or adapt
+this example code however you like; your ability to write an interface
+between Python and another programming language is not part of the assessment
+for this module. You should be able to use this class to run an external
+agent in any programming language that can communicate with stdin and stdout,
+by changing the command in its `__init__` method:
 
 ```python
 self.agent_process = Popen(
@@ -115,84 +161,192 @@ self.agent_process = Popen(
 )
 ```
 
-This is the same as the terminal command
-`java -cp agents/DefaultAgents NaiveAgent R 11` for a Red agent. Copy the
-class into your group folder and name it in your `cmd.txt`.
+The provided example is equivalent to running the command
+`java -cp agents/DefaultAgents NaiveAgent B 11` in the terminal, assuming the
+agent has been assigned the colour Blue. The `-cp agents/DefaultAgents` part
+of the command specifies the location of the compiled `NaiveAgent.class`
+file. If you copy the class into your group folder, change this to
+`agents/GroupN`, and name the class in your `cmd.txt`.
 
-### Message format
+If using the provided `ExternalAgent` code, when the game is started your
+code will be launched using the command specified in the `__init__` method.
+On each of your agent's turns, a message will be sent via your process' stdin
+in the format described below, and the game will wait for a response via
+your process' stdout. Each message sent by the game will end in a newline
+(`\n`). Your response should consist of one line, also ending in a newline.
 
-On each of your turns, the engine sends one line to your program's stdin:
+#### Message format
 
-```text
-COMMAND;MOVE;BOARD;TURN;
-```
+The basic message format that the game will send to your agent is
+`COMMAND;MOVE;BOARD;TURN;\n`. Your agent should respond with `x,y\n`, where
+`x` and `y` are the coordinates of the tile you are changing. To make a swap
+move, `x` and `y` should both be set to `-1`.
 
-Your program answers with one line on stdout: `x,y`, or `-1,-1` to swap.
-Every line ends with a newline (`\n`).
+`COMMAND` can take the values `START`, `SWAP`, or `CHANGE`. `START` is only
+used on the first turn of the game – i.e. you will only receive a `START`
+message if you are Red. `SWAP` indicates that the opponent has chosen to swap
+colours: you are now Blue. The swap move is only allowed for player 2 (Blue)
+on their first turn – i.e. only on turn 2 of the game. If your own agent
+swaps, it is Red from then on; the engine does not send a message about your
+own swap. `CHANGE` specifies a tile that the opponent has changed to their
+colour. `MOVE` will be blank for `START` and `SWAP` messages; `BOARD` and
+`TURN` will always be specified.
 
-- `COMMAND` is one of:
-  - `START`: you make the first move of the game (you are Red, turn 1).
-  - `CHANGE`: the opponent played a tile. `MOVE` gives its coordinates as
-    `x,y`.
-  - `SWAP`: the opponent swapped on turn 2. You are now Blue.
-- `MOVE` is empty for `START` and `SWAP`.
-- `BOARD` is the board at the start of your turn: one string per row (x = 0
-  first), separated by commas, with `0`, `R` or `B` for each tile (y = 0
-  first). A 2 × 2 empty board is `00,00`.
-- `TURN` is the turn number of the move you are about to make, from 1.
+`MOVE` takes the value of the `x,y` coordinates of the tile the opponent has
+changed when they make a `CHANGE` move.
 
-If your program swaps on turn 2, it is Red from then on. The engine does not
-send a message about your own swap.
+`BOARD` specifies the state of the board at the beginning of your turn, with
+each tile taking the value `0`, `R` or `B`, and each row (x = 0 first)
+separated by a comma. For example, a 2x2 board on turn 1 would be given as
+`00,00`.
 
-Examples on a 3 × 3 board:
+`TURN` is the turn number for the move you are about to make, starting from 1.
 
-| Message | Meaning |
+Example commands:
+
+| Command | Explanation |
 | --- | --- |
-| `START;;000,000,000;1;` | Make the first move of the game. |
-| `CHANGE;0,1;0R0,000,000;2;` | The opponent (Red) played tile (0, 1) on turn 1. You make move 2. |
-| `SWAP;;0R0,000,000;3;` | The opponent swapped on turn 2. You are now Blue and make move 3. |
+| `START;;000,000,000;1;\n` | Request for the opening move of a game using a 3x3 board |
+| `SWAP;;0R0,000,000;3;\n` | The opponent has swapped colours on turn 2 and the player agent is about to make move 3 |
+| `CHANGE;0,1;0R0,000,000;2;\n` | The opponent changed tile (0,1) to red as their opening move |
 
-| Answer | Meaning |
+Example responses:
+
+| Response | Explanation |
 | --- | --- |
-| `1,2` | Play tile (1, 2). |
-| `-1,-1` | Swap (turn 2 only). |
+| `1,2\n` | Change the tile with the coordinates (1,2) to your colour |
+| `-1,-1\n` | Make a swap move |
 
 Important:
 
-- Flush stdout after each answer (in C++, use `std::endl` or `fflush`).
-- Write debug text to stderr only. Any other text on stdout breaks the
+- Flush stdout after each response (in C++, use `std::endl` or `fflush`).
+- Write any debug text to stderr only. Any other text on stdout breaks the
   protocol.
 - Exit when stdin closes. Do not leave processes running after the game.
-- Compile inside the Docker container and include the compiled files.
 
-## Run games
+#### Compiled code and build.sh
 
-Run these commands inside the Docker container, from the repository root.
+Games use the compiled files that you submit. We also rebuild them from your
+source, to check that the source is the code that plays. So if your agent
+has any compiled part (a program, a shared library, a Python extension
+module, or Java `.class` files), you must submit:
 
-| Command | What it does |
+1. the source code of every compiled part;
+2. the compiled files, at the paths your agent uses them;
+3. a script `agents/GroupN/build.sh` that builds every compiled file again
+   from the source, at the same paths.
+
+We run `bash agents/GroupN/build.sh` from the repository root, in the build
+image (`docker build --target build -t hex-build .`), on a copy of your
+folder from which all compiled files have been removed. The build may use the
+network (for example to download Rust crates or Go modules). Limits for builds are:
+30 minutes, 8 CPUs, 16 GB of memory.
+
+| Outcome | Result |
 | --- | --- |
-| `python3 Hex.py` | Two `NaiveAgent` bots play each other. |
-| `python3 Hex.py -p1 "agents.Group0.MyAgent MyGoodAgent"` | Player 1 is the class `MyGoodAgent` in `agents/Group0/MyAgent.py`; player 2 is `NaiveAgent`. |
-| `python3 Hex.py -p2 "agents.Group0.MyAgent MyGoodAgent"` | The same, with your bot as player 2. |
-| `python3 Hex.py -p1 "agents.Group0.MyOtherAgent MyBadAgent" -p2 "agents.Group0.MyAgent MyGoodAgent"` | Two of your own bots play each other. |
+| Our rebuild works | Games use the files you submitted. |
+| Your submitted files do not run on the marking machine, but our rebuilt files do | Games use our rebuilt files. |
+| Our rebuild fails, or a compiled file has no source | Your agent is marked as an agent that does not run (32%). |
+| Your files and our rebuilt files behave very differently | We review your submission by hand. |
 
-Put quotes around the values of `-p1` and `-p2`, because they contain a space.
-All options (`python3 Hex.py --help`):
+The build image has g++ (GCC 13), cmake, ninja, the Python 3.12 headers,
+pybind11, Cython, Java 21, Go and Rust (with the `x86_64-unknown-linux-musl`
+target). The exact versions are in `/etc/hex-build-tools.txt` and
+`/etc/hex-pip-freeze.txt` in the image. If you want to use a different language 
+or toolchain, speak to the course staff.
 
-| Option | Use |
+Advice:
+
+- The marking machine is x86-64. Do not compile with `-march=native`; use
+  `-march=x86-64-v3` if you want newer CPU instructions. On an Apple Silicon
+  Mac, build the images with `--platform linux/amd64`.
+- Python extension modules work only with the Python version they were
+  compiled for (3.12), so build them in the image.
+- C++ code that includes the PyTorch headers (for example
+  `torch/extension.h`) must be compiled as C++20 (`-std=c++20`): the headers
+  of PyTorch 2.15 do not compile as C++17.
+- Go: build with `CGO_ENABLED=0` to get a static program. Rust: build with
+  `--target x86_64-unknown-linux-musl` to get a static program.
+- Java: `javac --release 21`.
+- Test your script before you submit, on a fresh copy of the repository:
+  `docker run --rm -v "$(pwd)":/home/hex hex-build bash agents/GroupN/build.sh`
+  (in PowerShell use `"${PWD}:/home/hex"`, in Command Prompt `"%cd%:/home/hex"`).
+
+Example `build.sh` for a C++ program and a Java agent:
+
+```bash
+#!/bin/bash
+set -e
+g++ -O2 -march=x86-64-v3 -o agents/Group7/engine agents/Group7/src/*.cpp
+javac --release 21 -d agents/Group7 agents/Group7/MyAgent.java
+```
+
+## Running the game
+
+### Basics
+
+#### From Terminal
+
+Run these commands inside the Docker container (see [Docker](#docker)), from
+the repository root.
+
+Example commands:
+
+| Command | Explanation |
 | --- | --- |
-| `-p1`, `--player1` | Player 1 agent, as `agents.GroupX.AgentFile AgentClassName` |
-| `-p1Name`, `--player1Name` | Player 1 name (default `Red`) |
-| `-p2`, `--player2` | Player 2 agent, as above |
-| `-p2Name`, `--player2Name` | Player 2 name (default `Blue`) |
-| `-v`, `--verbose` | More detailed output |
-| `-b`, `--board_size` | Board size, for example `-b 7`. Marked games use 11. |
-| `-l`, `--log` | Write the game log to `game.log`, or to the file you give, for example `-l test/test.log`. The file is overwritten. Without `-l`, the log goes to stderr. |
+| `python3 Hex.py` | Run the game engine with two default agents |
+| `python3 Hex.py -p1 "agents.Group0.MyAgent MyGoodAgent"` | Run the game engine with player 1 as the class `MyGoodAgent` in the file `agents/Group0/MyAgent.py`, and player 2 as default agent |
+| `python3 Hex.py -p2 "agents.Group0.MyAgent MyGoodAgent"` | Run the game engine with player 2 as the class `MyGoodAgent` in the file `agents/Group0/MyAgent.py`, and player 1 as default agent |
+| `python3 Hex.py -p1 "agents.Group0.MyOtherAgent MyBadAgent" -p2 "agents.Group0.MyAgent MyGoodAgent"` | Run the game engine with player 1 as the class `MyBadAgent` from the file `agents/Group0/MyOtherAgent.py` and player 2 as the class `MyGoodAgent` in the file `agents/Group0/MyAgent.py` |
 
-## Game log
+The first command will play a game between two Naive agents, located at
+`agents/DefaultAgents/NaiveAgent.py` with the class name `NaiveAgent`. By
+default the game log will also be printed to stderr. The details of the log
+formatting are explained in [Log format](#log-format).
 
-The log is a CSV file. This example is from `python3 Hex.py -l` with the
-player names Alice and Bob:
+To see all the available options and arguments of the engine use
+`python3 Hex.py --help`, or see the table below. (Note that quotes must be
+used when specifying arguments which contain spaces, i.e. the `-p1` and
+`-p2` arguments.)
+
+| Argument | Usage |
+| --- | --- |
+| `-p1`, `--player1` | Specify the player 1 agent. Format: `agents.GroupX.AgentFile AgentClassName`, e.g. `"agents.Group0.NaiveAgent NaiveAgent"` |
+| `-p1Name`, `--player1Name` | Specify the player 1 name (default `Red`) |
+| `-p2`, `--player2` | Specify the player 2 agent, in the same format |
+| `-p2Name`, `--player2Name` | Specify the player 2 name (default `Blue`) |
+| `-v`, `--verbose` | Enable verbose logging |
+| `-b`, `--board_size` | Specify the board size\*, e.g. `-b 11` |
+| `-l`, `--log` | Save the move history to a log file. If the flag is present, the result is saved to `game.log`; if a filename is provided, to that file. If the flag is not present, the log is printed to stderr. |
+
+\* Your agent will be tested on an 11x11 board; this option is provided for
+development.
+
+#### Docker
+
+We will run each game within the Docker image built from the `Dockerfile` in
+the repository. This means you can test your agent in the environment it will
+be tested in, to ensure compatibility. The commands to build the image and
+run the container (for Linux, macOS, Windows PowerShell and Command Prompt)
+are in the [README](../README.md). In short:
+
+```bash
+docker build -t hex .
+docker run -it --cpuset-cpus=0-7 --memory=16g --name hex -v "$(pwd)":/home/hex hex bash
+```
+
+The container starts in `/home/hex`, which is your copy of the repository:
+any changes made there are also changes on your computer. After you are in
+the container, all the steps from [From Terminal](#from-terminal) apply. To
+exit the container, type `exit`. To enter it again, use
+`docker start -i hex`.
+
+The limits in marked games are in [Rules in marked games](#rules-in-marked-games).
+
+### Log format
+
+The game log is a CSV file. The following is an example of a log generated
+by `python3 Hex.py -l -p1Name Alice -p2Name Bob`:
 
 ```csv
 1,Alice,RED(x=4, y=5),31517
@@ -205,31 +359,53 @@ Alice,902392
 winner,Alice,WIN
 ```
 
-- Each move line gives: the turn, the player's name, the player's colour and
-  move, and the player's **total** time used so far in this game, in
-  nanoseconds. The colour is the colour after the move: in line 2, Bob
-  swapped and is now Red.
-- After the moves: the total time of each player (Red first), then the
-  winner and the end state.
-- If a player crashed, the lines before the totals start with `#` and show
-  the error.
+Each move line gives the turn number, player name, colour and move, and the
+player's **total** time used so far in this game, in nanoseconds. As a
+result, line 1 means "at turn 1, player Alice, holding red, played at
+(x=4, y=5); Alice has used 31517 ns so far". Line 2 means "Bob played the
+swap move (and is now Red)".
 
-## cmd.txt
+The last lines show the total time spent by the player on the red side, then
+the blue side, and lastly who the winner is and what the end state is. If a
+player crashed, the lines before the totals start with `#` and show the
+error.
 
-`cmd.txt` tells the marking scripts which class to load. If your bot is the
-class `VeryNaiveAgent` in `agents/Group7/NaiveAgent.py`, then `cmd.txt` is:
+As mentioned, by default the engine prints the log to stderr. Using `-l`
+writes the log to `game.log` in the directory where you start the engine.
+Each time, the file is overwritten. You can save the log to another file by
+providing a file path, for example `-l ./test/test.log`.
+
+### cmd.txt
+
+You will specify the path to your agent file using a file named `cmd.txt`,
+which will be included within your group folder.
+
+For example, if your agent is located at `agents/Group7/NaiveAgent.py` and
+the class name is `VeryNaiveAgent`, then the content of the `cmd.txt` should
+be the following:
 
 ```text
 agents.Group7.NaiveAgent VeryNaiveAgent
 ```
 
-- One line only: the module path, exactly one space, and the class name. No
-  other text.
+Note that this is only the location and name of your agent class, and not
+any other parts of the command to launch the game engine. It is very
+important that `cmd.txt` only includes the file path and the class name, and
+not any additional text. No messages, no instructions – this text will be
+extracted from the file automatically during the marking process, so if you
+add any additional text to the file your code may fail to run.
+
+The string will be the calling argument for performing the agent import, so
+the format needs to be precise:
+
+- There should be only one white space between the agent path and the agent
+  class name, and only one line.
 - Save it as plain text, UTF-8, without a byte order mark (BOM).
-- The `GroupN` in the line must match your folder name exactly, including
-  the capital G.
-- For a bot in another language, give the Python class that starts your
-  program.
+- The `GroupN` in the line must match your folder name exactly, including the
+  capital G.
+- If you wrote your agent in an alternative programming language, specify
+  the Python agent in `cmd.txt`; you will launch your code from within this
+  Python class as explained in [Alternative languages](#alternative-languages).
 - Use full import paths in your code, for example
   `from agents.Group7.utils import f`. A plain `from utils import f` fails.
 - Open your files with paths built from your file's location, for example
@@ -241,16 +417,15 @@ agents.Group7.NaiveAgent VeryNaiveAgent
 - **Time:** each player has 5 minutes in total per game for all its moves (a
   chess clock). Start-up (your `__init__`) must finish within 3 minutes.
   If you go over either limit, you lose that game.
-- **Hardware:** your bot gets 8 CPU cores and 8 GB of memory. There is no GPU;
-  PyTorch is installed but uses the CPU.
-- **Pausing:** your bot is paused during the opponent's turn. Its threads and
-  child processes stop too, and continue in your next turn. (`Hex.py` and
-  `check_submission.py` do not pause bots yet.)
+- **Hardware:** your agent gets 8 CPUs (logical CPUs, as with Docker's
+  `--cpuset-cpus=0-7`) and 8 GB of memory. There is no GPU available.
+- **Pausing:** your agent is paused during the opponent's turn. Its threads
+  and child processes stop too, and continue in your next turn. 
 - **Fresh folder:** each game starts from a fresh copy of your folder. Files
-  that your bot writes during a game are not kept.
-- **Random seed:** your bot can set its own random seed. If it does not, the
-  engine sets one for each game.
-- **No network:** there is no network during games.
+  that your agent writes during a game are not kept.
+- **Random seed:** your agent can set its own random seed. If it does not,
+  the marking engine sets one for each game (`Hex.py` does not).
+- **No network:** there is no network access during games.
 - **Fair play:** do not read or change the game engine, the opponent or the
   timer. We treat this as academic misconduct.
 - **Only your folder:** we use our own copy of everything outside

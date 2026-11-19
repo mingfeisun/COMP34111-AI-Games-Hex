@@ -1,8 +1,20 @@
 # COMP34111 AI and Games: Hex
 
 This repository holds the Hex game engine for the COMP34111 group project. We
-mark every bot inside the Docker image built from this `Dockerfile`, so make
-sure your bot works inside the container.
+play and mark every bot inside the Docker image built from this `Dockerfile`,
+so make sure your bot works inside the container.
+
+How the engine works, the rules for marked games and how bots are marked:
+[docs/GAME.md](docs/GAME.md).
+
+## The environment
+
+- Ubuntu 24.04, x86-64 (also the architecture of the marking machine).
+- Python 3.12 with PyTorch 2.15 (CPU only), NumPy, pandas, SciPy and
+  scikit-learn. The exact versions are in `/etc/hex-pip-freeze.txt` in the
+  image.
+- Java 21 (JDK) and g++.
+- There is **no GPU** available in marked games.
 
 ## Build the image
 
@@ -10,23 +22,48 @@ sure your bot works inside the container.
 docker build -t hex .
 ```
 
-The build takes a while. On Linux or macOS you can add
-`--build-arg UID=$(id -u)`, so that files you create in the container belong
-to your user.
+The build takes a while. **On an Apple Silicon Mac**, build an x86-64 image, or
+your compiled code will not run on the marking machine:
+
+```bash
+docker build --platform linux/amd64 -t hex .
+```
+
+If your bot has compiled parts (C, C++, Go, Rust, Java, Python extension
+modules), also build the build image, which adds the compilers and tools we
+use to rebuild your code (see docs/GAME.md):
+
+```bash
+docker build --target build -t hex-build .
+```
+
+You can use anything in statically linked binaries in x86-64 Linux.
+If you would like to use a different language or toolchain, speak to the course staff. 
+We will try to help, but cannot guarantee we are able to accommodate all requests. 
 
 ## Run the container
 
 Linux, macOS or WSL (bash):
 
 ```bash
-docker run -it --cpus=8 --memory=8g --name hex -v "$(pwd)":/home/hex hex bash
+docker run -it --cpuset-cpus=0-7 --memory=16g --name hex -v "$(pwd)":/home/hex hex bash
 ```
 
 Windows PowerShell:
 
 ```powershell
-docker run -it --cpus=8 --memory=8g --name hex -v "${PWD}:/home/hex" hex bash
+docker run -it --cpuset-cpus=0-7 --memory=16g --name hex -v "${PWD}:/home/hex" hex bash
 ```
+
+Windows Command Prompt (cmd.exe):
+
+```bat
+docker run -it --cpuset-cpus=0-7 --memory=16g --name hex -v "%cd%:/home/hex" hex bash
+```
+
+`--cpuset-cpus=0-7` gives the container 8 virtual CPU cores. This is how many your bot will get during marking. 
+If your computer has fewer than 8 CPUs, leave the option out. 16 GB is for both bots of a game together (8 GB
+each).
 
 The container starts in `/home/hex`, which is this repository. Changes there
 are also changes on your computer. Type `exit` to stop the container. To start
@@ -53,33 +90,8 @@ python3 Hex.py -p1 "agents.Group7.MyAgent MyAgent" -p2 "agents.DefaultAgents.Nai
 python3 check_submission.py 7      # checks agents/Group7/
 ```
 
-## Limits in marked games
-
-- 5 minutes per player per game for all moves (chess clock).
-- 3 minutes for your agent's start-up (`__init__`).
-- 8 CPU cores and 8 GB of memory per agent. There is no GPU. PyTorch is
-  installed, but it uses the CPU.
-- No network during games. Use only the packages in the image.
-
-The full rules are in the coursework instructions on Canvas.
-
-## Bots in other languages
-
-`agents/DefaultAgents/ExternalAgent.py` shows how a Python agent class starts a
-program in another language and talks to it. The image has a Java JDK and
-`g++`. Compile inside the container, for example:
-
-```bash
-javac -d agents/DefaultAgents agents/DefaultAgents/NaiveAgent.java
-```
-
 ## Run the tests
 
 ```bash
 python3 -m unittest discover
 ```
-
-## Game documentation
-
-How the engine works, the message format for other languages, the log
-format, `cmd.txt` and the rules for marked games: [docs/GAME.md](docs/GAME.md).
